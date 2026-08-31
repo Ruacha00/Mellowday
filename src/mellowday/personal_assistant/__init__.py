@@ -1,6 +1,15 @@
 """Personal Assistant domain capabilities."""
 
 from .persona import Persona, SQLitePersonaStore
+from .note_tools import build_note_tools
+from .notes import (
+    Note,
+    NoteChange,
+    NoteOperation,
+    NoteUpdates,
+    NoteValidationError,
+    SQLiteNoteService,
+)
 from .reminder_tools import build_reminder_tools
 from .reminders import (
     Reminder,
@@ -25,6 +34,11 @@ from .tasks import (
 
 __all__ = [
     "Persona",
+    "Note",
+    "NoteChange",
+    "NoteOperation",
+    "NoteUpdates",
+    "NoteValidationError",
     "Reminder",
     "ReminderChange",
     "ReminderDelivery",
@@ -34,6 +48,7 @@ __all__ = [
     "ReminderUpdates",
     "ReminderValidationError",
     "SQLitePersonaStore",
+    "SQLiteNoteService",
     "SQLiteReminderService",
     "SQLiteTaskService",
     "Task",
@@ -42,5 +57,6 @@ __all__ = [
     "TaskUpdates",
     "TaskValidationError",
     "build_task_tools",
+    "build_note_tools",
     "build_reminder_tools",
 ]

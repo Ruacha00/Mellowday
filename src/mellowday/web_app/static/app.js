@@ -48,6 +48,10 @@ const recentConfirmationList = document.querySelector("#recent-confirmation-list
 const taskForm = document.querySelector("#task-form");
 const taskList = document.querySelector("#task-list");
 const cancelTaskEdit = document.querySelector("#cancel-task-edit");
+const noteForm = document.querySelector("#note-form");
+const noteList = document.querySelector("#note-list");
+const noteSearch = document.querySelector("#note-search");
+const cancelNoteEdit = document.querySelector("#cancel-note-edit");
 const reminderForm = document.querySelector("#reminder-form");
 const reminderList = document.querySelector("#reminder-list");
 const cancelReminderEdit = document.querySelector("#cancel-reminder-edit");
@@ -644,6 +648,131 @@ taskForm.addEventListener("submit", async (event) => {
 });
 
 cancelTaskEdit.addEventListener("click", resetTaskForm);
+
+function noteLabel(note) {
+  return note.title || "Untitled Note";
+}
+
+function resetNoteForm() {
+  noteForm.reset();
+  noteForm.elements.namedItem("note_id").value = "";
+  noteForm.querySelector('button[type="submit"]').textContent = "Add Note";
+  cancelNoteEdit.hidden = true;
+}
+
+function editNote(note) {
+  noteForm.elements.namedItem("note_id").value = note.id;
+  noteForm.elements.namedItem("title").value = note.title || "";
+  noteForm.elements.namedItem("content").value = note.content;
+  noteForm.querySelector('button[type="submit"]').textContent = "Save Note";
+  cancelNoteEdit.hidden = false;
+  noteForm.elements.namedItem("content").focus();
+}
+
+function noteAction(label, note, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = label;
+  button.setAttribute("aria-label", `${label} ${noteLabel(note)}`);
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function renderNotes(notes) {
+  noteList.replaceChildren();
+  if (notes.length === 0) {
+    noteList.append(makeEmptyState(noteSearch.value ? "No matching Notes." : "No Notes yet."));
+    return;
+  }
+  for (const note of notes) {
+    const card = document.createElement("article");
+    card.className = "capability-card task-card";
+    const heading = document.createElement("div");
+    heading.className = "task-card-heading";
+    const title = document.createElement("strong");
+    title.textContent = noteLabel(note);
+    const updated = document.createElement("span");
+    updated.className = "skill-state";
+    updated.textContent = `Updated ${formatUpdatedAt(note.updated_at)}`;
+    heading.append(title, updated);
+    const content = document.createElement("p");
+    content.className = "note-content";
+    content.textContent = note.content;
+    const actions = document.createElement("div");
+    actions.className = "task-actions";
+    actions.append(
+      noteAction("Edit", note, () => editNote(note)),
+      noteAction("Delete", note, async () => {
+        if (!window.confirm(`Permanently delete ${noteLabel(note)}?`)) return;
+        const path = `/api/settings/notes/${encodeURIComponent(note.id)}`;
+        const requested = await fetch(`${path}/delete-confirmation`, { method: "POST" });
+        if (!requested.ok) {
+          settingsStatus.textContent = "Note could not be deleted.";
+          return;
+        }
+        const { confirmation } = await requested.json();
+        const response = await fetch(path, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmation_id: confirmation.id,
+            binding: confirmation.binding,
+            decision: "accept",
+          }),
+        });
+        settingsStatus.textContent = response.ok ? "Note deleted." : "Note delete confirmation is unavailable.";
+        if (response.ok) {
+          resetNoteForm();
+          await loadNotes();
+        }
+      }),
+    );
+    card.append(heading, content, actions);
+    noteList.append(card);
+  }
+}
+
+async function loadNotes() {
+  const query = noteSearch.value.trim();
+  const response = await fetch(`/api/settings/notes?q=${encodeURIComponent(query)}`);
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderNotes(payload.notes);
+}
+
+noteForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const noteId = noteForm.elements.namedItem("note_id").value;
+  const button = noteForm.querySelector('button[type="submit"]');
+  const values = Object.fromEntries(new FormData(noteForm).entries());
+  const body = { title: values.title || null, content: values.content };
+  button.disabled = true;
+  try {
+    const response = await fetch(
+      noteId ? `/api/settings/notes/${encodeURIComponent(noteId)}` : "/api/settings/notes",
+      {
+        method: noteId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.detail?.message || `Request failed with ${response.status}`);
+    }
+    resetNoteForm();
+    settingsStatus.textContent = noteId ? "Note saved." : "Note added.";
+    await loadNotes();
+  } catch (error) {
+    settingsStatus.textContent = `Note could not be saved: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+noteSearch.addEventListener("input", loadNotes);
+cancelNoteEdit.addEventListener("click", resetNoteForm);
 
 function reminderInputValue(value) {
   const date = new Date(value);
@@ -1350,6 +1479,7 @@ async function loadSettings() {
     await Promise.all([
       loadPersona(),
       loadTasks(),
+      loadNotes(),
       loadReminders(),
       loadProviders(),
       loadConversations(),

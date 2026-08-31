@@ -37,18 +37,23 @@ from mellowday.agent_core.openai_compatible import (
     ProviderTransport,
 )
 from mellowday.personal_assistant import (
+    NoteChange,
+    NoteUpdates,
+    NoteValidationError,
     Persona,
     ReminderChange,
     ReminderDelivery,
     ReminderScheduler,
     ReminderUpdates,
     ReminderValidationError,
+    SQLiteNoteService,
     SQLitePersonaStore,
     SQLiteReminderService,
     SQLiteTaskService,
     TaskChange,
     TaskUpdates,
     TaskValidationError,
+    build_note_tools,
     build_reminder_tools,
     build_task_tools,
 )
@@ -150,6 +155,16 @@ class ReminderUpdateBody(BaseModel):
     conversation_id: str | None = Field(default=None, min_length=1)
 
 
+class NoteCreateBody(BaseModel):
+    content: str = Field(min_length=1)
+    title: str | None = None
+
+
+class NoteUpdateBody(BaseModel):
+    content: str | None = Field(default=None, min_length=1)
+    title: str | None = None
+
+
 def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
     return ConfirmationBinding(
         user_id=body.user_id,
@@ -217,6 +232,18 @@ def create_app(
         database_path, change_listener=record_task_change
     )
 
+    def record_note_change(change: NoteChange) -> None:
+        agent_core_reference[0].record_application_action(
+            action=change.operation,
+            resource_type="note",
+            resource_id=change.note_id,
+            conversation_id=change.conversation_id,
+        )
+
+    note_service = SQLiteNoteService(
+        database_path, change_listener=record_note_change
+    )
+
     def record_reminder_change(change: ReminderChange) -> None:
         agent_core_reference[0].record_application_action(
             action=change.operation,
@@ -232,6 +259,7 @@ def create_app(
     )
     registered_tools = (
         *build_task_tools(task_service),
+        *build_note_tools(note_service),
         *build_reminder_tools(reminder_service),
         *tuple(tools),
     )
@@ -354,6 +382,17 @@ def create_app(
             status_code=422,
             content={
                 "detail": {"code": "invalid_reminder", "message": str(error)}
+            },
+        )
+
+    @app.exception_handler(NoteValidationError)
+    async def note_validation_failure(
+        _request: Request, error: NoteValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {"code": "invalid_note", "message": str(error)}
             },
         )
 
@@ -778,6 +817,85 @@ def create_app(
             "ok": True,
             "decision": decision,
             "deleted_task": asdict(task),
+            "event": asdict(event),
+        }
+
+    @app.get("/api/settings/notes")
+    async def list_notes(q: str = "") -> dict[str, object]:
+        return {"notes": [asdict(note) for note in note_service.search(q)]}
+
+    @app.post("/api/settings/notes", status_code=201)
+    async def create_note(body: NoteCreateBody) -> dict[str, object]:
+        note = note_service.create(**body.model_dump())
+        return {"note": asdict(note)}
+
+    @app.get("/api/settings/notes/{note_id}")
+    async def get_note(note_id: str) -> dict[str, object]:
+        note = note_service.get(note_id)
+        if note is None:
+            raise HTTPException(status_code=404, detail="Note not found")
+        return {"note": asdict(note)}
+
+    @app.patch("/api/settings/notes/{note_id}")
+    async def update_note(
+        note_id: str, body: NoteUpdateBody
+    ) -> dict[str, object]:
+        updates = cast(NoteUpdates, body.model_dump(exclude_unset=True))
+        if "content" in updates and updates["content"] is None:
+            raise NoteValidationError("content must not be null")
+        note = note_service.update(note_id, **updates)
+        if note is None:
+            raise HTTPException(status_code=404, detail="Note not found")
+        return {"note": asdict(note)}
+
+    @app.post("/api/settings/notes/{note_id}/delete-confirmation")
+    async def request_note_delete_confirmation(
+        note_id: str,
+    ) -> dict[str, object]:
+        if note_service.get(note_id) is None:
+            raise HTTPException(status_code=404, detail="Note not found")
+        confirmation, event = agent_core.request_application_confirmation(
+            user_id="local-user",
+            conversation_id="settings",
+            action="note_delete",
+            arguments={"note_id": note_id},
+        )
+        return {"confirmation": asdict(confirmation), "event": asdict(event)}
+
+    @app.delete("/api/settings/notes/{note_id}")
+    async def delete_note(
+        note_id: str, body: ApplicationConfirmationDecisionBody
+    ) -> dict[str, object]:
+        if (
+            body.binding.tool != "note_delete"
+            or body.binding.arguments != {"note_id": note_id}
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Confirmation is bound to a different Note action",
+            )
+        try:
+            decision, event = agent_core.decide_application_confirmation(
+                ConfirmationDecision(
+                    confirmation_id=body.confirmation_id,
+                    binding=_confirmation_binding(body.binding),
+                    decision=body.decision,
+                )
+            )
+        except ConfirmationError as error:
+            raise HTTPException(
+                status_code=_confirmation_status_code(error.code),
+                detail="Confirmation is unavailable for this decision",
+            ) from error
+        if decision == "reject":
+            return {"ok": False, "decision": decision, "event": asdict(event)}
+        note = note_service.delete(note_id)
+        if note is None:
+            raise HTTPException(status_code=404, detail="Note not found")
+        return {
+            "ok": True,
+            "decision": decision,
+            "deleted_note": asdict(note),
             "event": asdict(event),
         }
 

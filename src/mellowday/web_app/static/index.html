@@ -207,6 +207,42 @@
           <div id="task-list" class="task-list" aria-live="polite"></div>
         </section>
 
+        <section class="task-settings" aria-labelledby="note-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Life Records</p>
+              <h3 id="note-settings-title">Notes</h3>
+              <p class="capability-description">
+                Preserve free-form content deliberately. Notes remain separate from Memory.
+              </p>
+            </div>
+            <span class="local-badge">Local Notes</span>
+          </header>
+
+          <form id="note-form" class="task-form">
+            <input name="note_id" type="hidden" />
+            <label>
+              <span>Note title (optional)</span>
+              <input name="title" autocomplete="off" aria-label="Note title" />
+            </label>
+            <label>
+              <span>Note content</span>
+              <textarea name="content" rows="4" required aria-label="Note content"></textarea>
+            </label>
+            <div class="task-form-actions">
+              <button type="submit">Add Note</button>
+              <button id="cancel-note-edit" class="text-button" type="button" hidden>
+                Cancel edit
+              </button>
+            </div>
+          </form>
+          <label class="note-search">
+            <span>Search Notes</span>
+            <input id="note-search" type="search" autocomplete="off" aria-label="Search Notes" />
+          </label>
+          <div id="note-list" class="task-list" aria-live="polite"></div>
+        </section>
+
         <section class="task-settings" aria-labelledby="reminder-settings-title">
           <header class="history-settings-heading">
             <div>
