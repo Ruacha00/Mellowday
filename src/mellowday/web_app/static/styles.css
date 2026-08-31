@@ -592,6 +592,33 @@ button:disabled {
   font: inherit;
 }
 
+.note-search {
+  display: grid;
+  gap: 7px;
+  margin-top: 22px;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.note-search input {
+  width: 100%;
+  padding: 10px 12px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 2px 12px 12px 12px;
+  background: rgba(255, 255, 255, 0.62);
+  font: inherit;
+}
+
+.note-content {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .task-form-actions,
 .task-actions,
 .task-card-heading {
