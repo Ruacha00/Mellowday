@@ -1,15 +1,17 @@
 """Browser-facing Web App boundary."""
 
 import asyncio
+import json
 import logging
 import time
-from collections.abc import Iterable
+from collections.abc import AsyncIterator, Callable, Iterable
+from contextlib import asynccontextmanager, suppress
 from dataclasses import asdict
 from pathlib import Path
 from typing import Literal, assert_never, cast
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -36,11 +38,18 @@ from mellowday.agent_core.openai_compatible import (
 )
 from mellowday.personal_assistant import (
     Persona,
+    ReminderChange,
+    ReminderDelivery,
+    ReminderScheduler,
+    ReminderUpdates,
+    ReminderValidationError,
     SQLitePersonaStore,
+    SQLiteReminderService,
     SQLiteTaskService,
     TaskChange,
     TaskUpdates,
     TaskValidationError,
+    build_reminder_tools,
     build_task_tools,
 )
 
@@ -127,6 +136,20 @@ class TaskUpdateBody(BaseModel):
     deadline: str | None = None
 
 
+class ReminderCreateBody(BaseModel):
+    message: str = Field(min_length=1)
+    due_at: str = Field(min_length=1)
+    task_id: str | None = None
+    conversation_id: str = Field(default="main", min_length=1)
+
+
+class ReminderUpdateBody(BaseModel):
+    message: str | None = Field(default=None, min_length=1)
+    due_at: str | None = Field(default=None, min_length=1)
+    task_id: str | None = None
+    conversation_id: str | None = Field(default=None, min_length=1)
+
+
 def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
     return ConfirmationBinding(
         user_id=body.user_id,
@@ -162,6 +185,8 @@ def create_app(
     history_message_limit: int = 40,
     history_character_limit: int = 12_000,
     provider_transport: ProviderTransport | None = None,
+    reminder_clock: Callable[[], float] = time.time,
+    reminder_poll_interval: float = 1.0,
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
@@ -191,7 +216,25 @@ def create_app(
     task_service = SQLiteTaskService(
         database_path, change_listener=record_task_change
     )
-    registered_tools = (*build_task_tools(task_service), *tuple(tools))
+
+    def record_reminder_change(change: ReminderChange) -> None:
+        agent_core_reference[0].record_application_action(
+            action=change.operation,
+            resource_type="reminder",
+            resource_id=change.reminder_id,
+            conversation_id=change.conversation_id,
+        )
+
+    reminder_service = SQLiteReminderService(
+        database_path,
+        clock=reminder_clock,
+        change_listener=record_reminder_change,
+    )
+    registered_tools = (
+        *build_task_tools(task_service),
+        *build_reminder_tools(reminder_service),
+        *tuple(tools),
+    )
     provider_health: dict[str, dict[str, object]] = {}
     configured_provider_transport = provider_transport or HttpxProviderTransport()
     if provider is None:
@@ -229,7 +272,50 @@ def create_app(
         runtime_events=runtime_events,
     )
     diagnostic_lock = asyncio.Lock()
-    app = FastAPI(title="Mellowday", docs_url=None, redoc_url=None)
+    live_queues: dict[str, set[asyncio.Queue[dict[str, object]]]] = {}
+    live_backlog: dict[str, list[dict[str, object]]] = {}
+
+    async def deliver_reminder(delivery: ReminderDelivery) -> None:
+        content = f"Reminder: {delivery.message}"
+        conversation_history.append(
+            delivery.conversation_id,
+            (ChatContent(role="assistant", content=content),),
+        )
+        payload: dict[str, object] = {
+            "reminder_id": delivery.reminder_id,
+            "role": "assistant",
+            "content": content,
+            "due_at": delivery.due_at,
+            "occurred_at": reminder_clock(),
+        }
+        backlog = live_backlog.setdefault(delivery.conversation_id, [])
+        backlog.append(payload)
+        del backlog[:-100]
+        for queue in tuple(live_queues.get(delivery.conversation_id, set())):
+            queue.put_nowait(payload)
+
+    reminder_scheduler = ReminderScheduler(
+        reminder_service, deliver_reminder, clock=reminder_clock
+    )
+
+    async def run_reminder_scheduler() -> None:
+        while True:
+            await reminder_scheduler.run_due()
+            await asyncio.sleep(reminder_poll_interval)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        scheduler_task = asyncio.create_task(run_reminder_scheduler())
+        try:
+            yield
+        finally:
+            scheduler_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await scheduler_task
+
+    app = FastAPI(
+        title="Mellowday", docs_url=None, redoc_url=None, lifespan=lifespan
+    )
     app.mount("/static", StaticFiles(directory=_STATIC_DIRECTORY), name="static")
 
     @app.exception_handler(ConversationHistoryError)
@@ -254,6 +340,17 @@ def create_app(
             status_code=422,
             content={
                 "detail": {"code": "invalid_task", "message": str(error)}
+            },
+        )
+
+    @app.exception_handler(ReminderValidationError)
+    async def reminder_validation_failure(
+        _request: Request, error: ReminderValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {"code": "invalid_reminder", "message": str(error)}
             },
         )
 
@@ -467,6 +564,40 @@ def create_app(
             "event": asdict(event),
         }
 
+    @app.get("/api/conversations/{conversation_id}/live")
+    async def live_conversation(
+        conversation_id: str,
+        request: Request,
+        after: float = Query(default=0.0, ge=0.0),
+    ) -> StreamingResponse:
+        async def events() -> AsyncIterator[str]:
+            queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+            subscribers = live_queues.setdefault(conversation_id, set())
+            subscribers.add(queue)
+            for payload in live_backlog.get(conversation_id, []):
+                occurred_at = cast(float, payload["occurred_at"])
+                if occurred_at >= after:
+                    queue.put_nowait(payload)
+            try:
+                yield ": connected\n\n"
+                while not await request.is_disconnected():
+                    try:
+                        payload = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    except TimeoutError:
+                        yield ": keepalive\n\n"
+                        continue
+                    yield f"event: reminder\ndata: {json.dumps(payload)}\n\n"
+            finally:
+                subscribers.discard(queue)
+                if not subscribers:
+                    live_queues.pop(conversation_id, None)
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
+
     @app.get("/api/settings/providers")
     async def list_provider_configurations() -> dict[str, object]:
         return {
@@ -644,6 +775,108 @@ def create_app(
             "ok": True,
             "decision": decision,
             "deleted_task": asdict(task),
+            "event": asdict(event),
+        }
+
+    @app.get("/api/settings/reminders")
+    async def list_reminders() -> dict[str, object]:
+        return {
+            "reminders": [asdict(reminder) for reminder in reminder_service.list()]
+        }
+
+    @app.post("/api/settings/reminders", status_code=201)
+    async def create_reminder(body: ReminderCreateBody) -> dict[str, object]:
+        reminder = reminder_service.create(**body.model_dump())
+        return {"reminder": asdict(reminder)}
+
+    @app.get("/api/settings/reminders/{reminder_id}")
+    async def get_reminder(reminder_id: str) -> dict[str, object]:
+        reminder = reminder_service.get(reminder_id)
+        if reminder is None:
+            raise HTTPException(status_code=404, detail="Reminder not found")
+        return {"reminder": asdict(reminder)}
+
+    @app.patch("/api/settings/reminders/{reminder_id}")
+    async def update_reminder(
+        reminder_id: str, body: ReminderUpdateBody
+    ) -> dict[str, object]:
+        updates = cast(ReminderUpdates, body.model_dump(exclude_unset=True))
+        if "message" in updates and updates["message"] is None:
+            raise ReminderValidationError("message must not be null")
+        if "due_at" in updates and updates["due_at"] is None:
+            raise ReminderValidationError("due_at must not be null")
+        if (
+            "conversation_id" in updates
+            and updates["conversation_id"] is None
+        ):
+            raise ReminderValidationError("conversation_id must not be null")
+        reminder = reminder_service.update(reminder_id, **updates)
+        if reminder is None:
+            raise HTTPException(status_code=404, detail="Reminder not found")
+        return {"reminder": asdict(reminder)}
+
+    @app.post("/api/settings/reminders/{reminder_id}/dismiss")
+    async def dismiss_reminder(reminder_id: str) -> dict[str, object]:
+        reminder = reminder_service.dismiss(reminder_id)
+        if reminder is None:
+            raise HTTPException(status_code=404, detail="Reminder not found")
+        return {"reminder": asdict(reminder)}
+
+    @app.post("/api/settings/reminders/{reminder_id}/cancel")
+    async def cancel_reminder(reminder_id: str) -> dict[str, object]:
+        reminder = reminder_service.cancel(reminder_id)
+        if reminder is None:
+            raise HTTPException(status_code=404, detail="Reminder not found")
+        return {"reminder": asdict(reminder)}
+
+    @app.post("/api/settings/reminders/{reminder_id}/delete-confirmation")
+    async def request_reminder_delete_confirmation(
+        reminder_id: str,
+    ) -> dict[str, object]:
+        if reminder_service.get(reminder_id) is None:
+            raise HTTPException(status_code=404, detail="Reminder not found")
+        confirmation, event = agent_core.request_application_confirmation(
+            user_id="local-user",
+            conversation_id="settings",
+            action="reminder_delete",
+            arguments={"reminder_id": reminder_id},
+        )
+        return {"confirmation": asdict(confirmation), "event": asdict(event)}
+
+    @app.delete("/api/settings/reminders/{reminder_id}")
+    async def delete_reminder(
+        reminder_id: str, body: ApplicationConfirmationDecisionBody
+    ) -> dict[str, object]:
+        if (
+            body.binding.tool != "reminder_delete"
+            or body.binding.arguments != {"reminder_id": reminder_id}
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Confirmation is bound to a different Reminder action",
+            )
+        try:
+            decision, event = agent_core.decide_application_confirmation(
+                ConfirmationDecision(
+                    confirmation_id=body.confirmation_id,
+                    binding=_confirmation_binding(body.binding),
+                    decision=body.decision,
+                )
+            )
+        except ConfirmationError as error:
+            raise HTTPException(
+                status_code=_confirmation_status_code(error.code),
+                detail="Confirmation is unavailable for this decision",
+            ) from error
+        if decision == "reject":
+            return {"ok": False, "decision": decision, "event": asdict(event)}
+        reminder = reminder_service.delete(reminder_id)
+        if reminder is None:
+            raise HTTPException(status_code=404, detail="Reminder not found")
+        return {
+            "ok": True,
+            "decision": decision,
+            "deleted_reminder": asdict(reminder),
             "event": asdict(event),
         }
 

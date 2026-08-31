@@ -514,7 +514,7 @@ def test_chat_creates_a_task_only_when_the_provider_uses_the_registered_tool(
         assert task_events[0]["conversation_id"] == "main"
         tool_names = {tool["name"] for tool in capabilities.json()["tools"]}
         assert "task_create" in tool_names
-        assert not any("reminder" in name for name in tool_names)
+        assert "reminder_create" in tool_names
 
     asyncio.run(exercise_boundary())
 
