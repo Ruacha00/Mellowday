@@ -60,6 +60,8 @@ class AgentCore:
         history_message_limit: int = 40,
         history_character_limit: int = 12_000,
         system_instructions_provider: Callable[[], str] | None = None,
+        context_instructions_provider: Callable[[tuple[ChatContent, ...]], str]
+        | None = None,
         provider_failure_content_provider: Callable[[ProviderFailure], str]
         | None = None,
         runtime_events: RuntimeEventLog | None = None,
@@ -86,6 +88,7 @@ class AgentCore:
         self._history_message_limit = history_message_limit
         self._history_character_limit = history_character_limit
         self._system_instructions_provider = system_instructions_provider
+        self._context_instructions_provider = context_instructions_provider
         self._provider_failure_content_provider = provider_failure_content_provider
         self._clock = clock
         self._max_provider_steps = max_provider_steps
@@ -309,7 +312,9 @@ class AgentCore:
             reply = await self._provider.complete(
                 ProviderRequest(
                     messages=binding.initiating_context,
-                    system_instructions=self._system_instructions(),
+                    system_instructions=self._system_instructions(
+                        binding.initiating_context
+                    ),
                     tools=self.list_tools(),
                     assistant_tool_calls=(
                         ToolCall(
@@ -423,7 +428,9 @@ class AgentCore:
                 reply = await self._provider.complete(
                     ProviderRequest(
                         messages=provider_messages,
-                        system_instructions=self._system_instructions(),
+                        system_instructions=self._system_instructions(
+                            provider_messages
+                        ),
                         tools=self.list_tools(),
                         assistant_tool_calls=tuple(assistant_tool_calls),
                         tool_results=tuple(tool_results),
@@ -564,10 +571,15 @@ class AgentCore:
         if self._conversation_history is not None:
             self._conversation_history.append(conversation_id, messages)
 
-    def _system_instructions(self) -> str:
-        if self._system_instructions_provider is None:
-            return ""
-        return self._system_instructions_provider().strip()
+    def _system_instructions(
+        self, messages: tuple[ChatContent, ...] = ()
+    ) -> str:
+        sections = []
+        if self._system_instructions_provider is not None:
+            sections.append(self._system_instructions_provider().strip())
+        if self._context_instructions_provider is not None:
+            sections.append(self._context_instructions_provider(messages).strip())
+        return "\n\n".join(section for section in sections if section)
 
     def _runtime_event(
         self,
@@ -685,6 +697,26 @@ class AgentCore:
         )
         if isinstance(arguments, ToolExecutionResult):
             return arguments
+        if tool.user_evidence_argument is not None:
+            evidence = arguments.get(tool.user_evidence_argument)
+            grounded = isinstance(evidence, str) and any(
+                message.role == "user" and message.content.strip() == evidence.strip()
+                for message in initiating_context
+            )
+            if not grounded:
+                result = ToolExecutionResult(
+                    call_id=call.id,
+                    name=call.name,
+                    ok=False,
+                    error="ungrounded_evidence",
+                )
+                emit(
+                    "tool_execution_failed",
+                    tool=call.name,
+                    call_id=call.id,
+                    error=result.error,
+                )
+                return result
         if decision == "confirm":
             return self._confirmations.create(
                 binding=ConfirmationBinding(
