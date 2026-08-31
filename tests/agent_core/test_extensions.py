@@ -416,6 +416,7 @@ def test_repeated_extension_requests_stop_without_reexecuting_a_tool() -> None:
     )
 
     assert result.stop_reason == "step_limit"
+    assert result.chat_content.content == ""
     assert len(provider.requests) == 2
     assert executions == ["conversation-1"]
     assert result.events[-1].type == "turn_limit_reached"
@@ -464,5 +465,6 @@ def test_tool_call_limit_stops_before_executing_the_batch() -> None:
     )
 
     assert result.stop_reason == "tool_call_limit"
+    assert result.chat_content.content == ""
     assert executions == []
     assert result.events[-1].details == {"limit": "tool_calls"}

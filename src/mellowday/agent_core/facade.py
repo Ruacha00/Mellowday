@@ -212,9 +212,8 @@ class AgentCore:
         reply_content: str,
     ) -> TurnResult:
         emit("turn_limit_reached", limit=limit)
-        content = reply_content or "The turn stopped after reaching its extension limit."
         return TurnResult(
-            chat_content=ChatContent(role="assistant", content=content),
+            chat_content=ChatContent(role="assistant", content=reply_content),
             stop_reason=stop_reason,
             events=tuple(events),
         )
