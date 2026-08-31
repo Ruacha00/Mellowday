@@ -55,6 +55,9 @@ const cancelNoteEdit = document.querySelector("#cancel-note-edit");
 const reminderForm = document.querySelector("#reminder-form");
 const reminderList = document.querySelector("#reminder-list");
 const cancelReminderEdit = document.querySelector("#cancel-reminder-edit");
+const calendarEventForm = document.querySelector("#calendar-event-form");
+const calendarEventList = document.querySelector("#calendar-event-list");
+const cancelCalendarEventEdit = document.querySelector("#cancel-calendar-event-edit");
 
 const activeConversationId = "main";
 const liveStartedAt = Date.now() / 1000;
@@ -928,6 +931,153 @@ reminderForm.addEventListener("submit", async (event) => {
 
 cancelReminderEdit.addEventListener("click", resetReminderForm);
 
+function calendarEventInputValue(value) {
+  return value ? value.slice(0, 16) : "";
+}
+
+function resetCalendarEventForm() {
+  calendarEventForm.reset();
+  calendarEventForm.elements.namedItem("event_id").value = "";
+  calendarEventForm.querySelector('button[type="submit"]').textContent = "Add Calendar Event";
+  cancelCalendarEventEdit.hidden = true;
+}
+
+function editCalendarEvent(event) {
+  calendarEventForm.elements.namedItem("event_id").value = event.id;
+  calendarEventForm.elements.namedItem("title").value = event.title;
+  calendarEventForm.elements.namedItem("start_at").value = calendarEventInputValue(event.start_at);
+  calendarEventForm.elements.namedItem("end_at").value = calendarEventInputValue(event.end_at);
+  calendarEventForm.elements.namedItem("details").value = event.details || "";
+  calendarEventForm.querySelector('button[type="submit"]').textContent = "Save Calendar Event";
+  cancelCalendarEventEdit.hidden = false;
+  calendarEventForm.elements.namedItem("title").focus();
+}
+
+function calendarEventAction(label, event, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = label;
+  button.setAttribute("aria-label", `${label} ${event.title}`);
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function renderCalendarEvents(events, conflicts) {
+  calendarEventList.replaceChildren();
+  if (events.length === 0) {
+    calendarEventList.append(makeEmptyState("No Calendar Events yet."));
+    return;
+  }
+  for (const event of events) {
+    const card = document.createElement("article");
+    card.className = "capability-card task-card";
+    const heading = document.createElement("div");
+    heading.className = "task-card-heading";
+    const title = document.createElement("strong");
+    title.textContent = event.title;
+    const timeRange = document.createElement("span");
+    timeRange.className = "skill-state";
+    timeRange.textContent = event.end_at ? "Timed" : "Starts at";
+    heading.append(title, timeRange);
+    const times = document.createElement("p");
+    times.className = "task-deadline";
+    const start = new Date(event.start_at).toLocaleString();
+    const end = event.end_at ? new Date(event.end_at).toLocaleString() : null;
+    times.textContent = end ? `${start} – ${end}` : start;
+    const details = document.createElement("p");
+    details.className = "capability-description";
+    details.textContent = event.details || "No details";
+    const eventConflicts = conflicts[event.id] || [];
+    const conflict = document.createElement("p");
+    conflict.className = eventConflicts.length ? "calendar-conflicts" : "capability-description";
+    conflict.textContent = eventConflicts.length
+      ? `Conflicts with ${eventConflicts.map((item) => item.title).join(", ")}.`
+      : "No conflicts.";
+    const actions = document.createElement("div");
+    actions.className = "task-actions";
+    actions.append(
+      calendarEventAction("Edit", event, () => editCalendarEvent(event)),
+      calendarEventAction("Delete", event, async () => {
+        if (!window.confirm(`Permanently delete ${event.title}?`)) return;
+        const path = `/api/settings/calendar-events/${encodeURIComponent(event.id)}`;
+        const requested = await fetch(`${path}/delete-confirmation`, { method: "POST" });
+        if (!requested.ok) {
+          settingsStatus.textContent = "Calendar Event could not be deleted.";
+          return;
+        }
+        const { confirmation } = await requested.json();
+        const response = await fetch(path, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmation_id: confirmation.id,
+            binding: confirmation.binding,
+            decision: "accept",
+          }),
+        });
+        settingsStatus.textContent = response.ok
+          ? "Calendar Event deleted."
+          : "Calendar Event delete confirmation is unavailable.";
+        if (response.ok) {
+          resetCalendarEventForm();
+          await loadCalendarEvents();
+        }
+      }),
+    );
+    card.append(heading, times, details, conflict, actions);
+    calendarEventList.append(card);
+  }
+}
+
+async function loadCalendarEvents() {
+  const response = await fetch("/api/settings/calendar-events");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderCalendarEvents(payload.calendar_events, payload.conflicts);
+}
+
+calendarEventForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const eventId = calendarEventForm.elements.namedItem("event_id").value;
+  const button = calendarEventForm.querySelector('button[type="submit"]');
+  const values = Object.fromEntries(new FormData(calendarEventForm).entries());
+  const body = {
+    title: values.title,
+    start_at: values.start_at,
+    end_at: values.end_at || null,
+    details: values.details || null,
+  };
+  button.disabled = true;
+  try {
+    const response = await fetch(
+      eventId
+        ? `/api/settings/calendar-events/${encodeURIComponent(eventId)}`
+        : "/api/settings/calendar-events",
+      {
+        method: eventId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.detail?.message || `Request failed with ${response.status}`);
+    }
+    resetCalendarEventForm();
+    settingsStatus.textContent = eventId
+      ? "Calendar Event saved."
+      : "Calendar Event added.";
+    await loadCalendarEvents();
+  } catch (error) {
+    settingsStatus.textContent = `Calendar Event could not be saved: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+cancelCalendarEventEdit.addEventListener("click", resetCalendarEventForm);
+
 function resetProviderForm() {
   providerForm.reset();
   providerForm.elements.namedItem("provider_id").value = "";
@@ -1481,6 +1631,7 @@ async function loadSettings() {
       loadTasks(),
       loadNotes(),
       loadReminders(),
+      loadCalendarEvents(),
       loadProviders(),
       loadConversations(),
       loadCapabilities(),

@@ -397,6 +397,60 @@ def test_user_can_manage_reminders_from_settings(tmp_path: Path) -> None:
         browser.close()
 
 
+def test_user_can_manage_calendar_events_and_see_conflicts_from_settings(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        installation_timezone="Asia/Shanghai",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.on("dialog", lambda dialog: dialog.accept())
+        page.goto(base_url)
+        page.get_by_role("button", name="Settings").click()
+
+        page.get_by_label("Calendar Event title", exact=True).fill("Project review")
+        page.get_by_label("Calendar Event start time", exact=True).fill(
+            "2026-09-04T17:00"
+        )
+        page.get_by_label("Calendar Event end time", exact=True).fill(
+            "2026-09-04T18:00"
+        )
+        page.get_by_label("Calendar Event details", exact=True).fill(
+            "Discuss launch"
+        )
+        page.get_by_role("button", name="Add Calendar Event").click()
+        expect(page.locator("#settings-status")).to_have_text(
+            "Calendar Event added."
+        )
+
+        page.get_by_label("Calendar Event title", exact=True).fill("Call")
+        page.get_by_label("Calendar Event start time", exact=True).fill(
+            "2026-09-04T17:30"
+        )
+        page.get_by_label("Calendar Event end time", exact=True).fill(
+            "2026-09-04T18:30"
+        )
+        page.get_by_role("button", name="Add Calendar Event").click()
+
+        expect(page.get_by_text("Conflicts with Project review.", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Edit Call").click()
+        page.get_by_label("Calendar Event start time", exact=True).fill(
+            "2026-09-04T19:00"
+        )
+        page.get_by_label("Calendar Event end time", exact=True).fill("")
+        page.get_by_role("button", name="Save Calendar Event").click()
+        expect(page.get_by_text("No conflicts.", exact=True).last).to_be_visible()
+        page.get_by_role("button", name="Delete Call").click()
+        expect(page.get_by_text("Call", exact=True)).not_to_be_visible()
+        browser.close()
+
+
 def test_user_can_manage_model_providers_from_settings(tmp_path: Path) -> None:
     class ValidTransport:
         async def request(

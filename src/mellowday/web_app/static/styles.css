@@ -647,6 +647,11 @@ button:disabled {
   font-size: 0.76rem;
 }
 
+.calendar-conflicts {
+  color: #9a4b2f;
+  font-weight: 650;
+}
+
 .provider-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

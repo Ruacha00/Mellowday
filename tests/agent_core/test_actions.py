@@ -17,6 +17,7 @@ from mellowday.agent_core import (
     Skill,
     Tool,
     ToolCall,
+    ToolClarificationRequired,
     ToolOutcome,
     TurnRequest,
     UndoMetadata,
@@ -158,6 +159,61 @@ def test_ambiguous_action_returns_natural_clarification_without_execution() -> N
     assert [event.type for event in result.events].count("action_decided") == 1
     assert "tool_execution_started" not in [event.type for event in result.events]
     assert core.list_pending_confirmations() == ()
+
+
+def test_tool_can_request_clarification_after_validating_domain_arguments() -> None:
+    async def schedule_event(
+        _arguments: dict[str, object], _conversation_id: str
+    ) -> object:
+        raise ToolClarificationRequired(
+            "start_at is ambiguous; include a UTC offset"
+        )
+
+    provider = ScriptedProvider(
+        (
+            ProviderReply(
+                tool_calls=(
+                    ToolCall(
+                        "ambiguous-time",
+                        "schedule_event",
+                        {"start_at": "2026-11-01T01:30"},
+                    ),
+                )
+            ),
+            ProviderReply(content="Which UTC offset should I use?"),
+        )
+    )
+    core = AgentCore(
+        provider=provider,
+        tools=(
+            Tool(
+                name="schedule_event",
+                description="Schedule an event at an unambiguous time.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"start_at": {"type": "string"}},
+                    "required": ["start_at"],
+                },
+                executor=schedule_event,
+                side_effect="reversible",
+            ),
+        ),
+    )
+
+    result = asyncio.run(
+        core.run_turn(
+            TurnRequest(
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Schedule it at 1:30."),),
+            )
+        )
+    )
+
+    clarification = provider.requests[1].tool_results[0]
+    assert clarification.error == "ambiguous_intent"
+    assert clarification.detail == "start_at is ambiguous; include a UTC offset"
+    assert result.stop_reason == "clarification"
+    assert result.chat_content.content == "Which UTC offset should I use?"
 
 
 def test_ambiguous_action_prevents_partial_execution_of_same_tool_batch() -> None:

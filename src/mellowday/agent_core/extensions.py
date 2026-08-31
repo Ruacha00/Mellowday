@@ -32,6 +32,10 @@ class ToolArgumentsError(ValueError):
     """Raised when arguments do not satisfy a Tool's input schema."""
 
 
+class ToolClarificationRequired(ValueError):
+    """Raised when a Tool needs more User input before it can execute."""
+
+
 @dataclass(frozen=True, slots=True)
 class ToolMetadata:
     name: str
@@ -260,6 +264,7 @@ __all__ = [
     "Tool",
     "ToolArgumentsError",
     "ToolCall",
+    "ToolClarificationRequired",
     "ToolExecutionResult",
     "ToolExecutor",
     "ToolMetadata",

@@ -24,6 +24,7 @@ from .extensions import (
     Tool,
     ToolArgumentsError,
     ToolCall,
+    ToolClarificationRequired,
     ToolExecutionResult,
     ToolMetadata,
     ToolOutcome,
@@ -520,6 +521,13 @@ class AgentCore:
                     )
                     clarification_requested = True
                     break
+                if (
+                    isinstance(outcome, ToolExecutionResult)
+                    and outcome.error == "ambiguous_intent"
+                ):
+                    tool_results.append(outcome)
+                    clarification_requested = True
+                    break
                 if isinstance(outcome, PendingConfirmation):
                     emit(
                         "confirmation_pending",
@@ -808,6 +816,21 @@ class AgentCore:
         emit("tool_execution_started", tool=tool.name, call_id=call_id)
         try:
             value = await tool.executor(arguments, conversation_id)
+        except ToolClarificationRequired as error:
+            result = ToolExecutionResult(
+                call_id=call_id,
+                name=tool.name,
+                ok=False,
+                error="ambiguous_intent",
+                detail=str(error),
+            )
+            emit(
+                "tool_execution_failed",
+                tool=tool.name,
+                call_id=call_id,
+                error=result.error,
+            )
+            return result
         except Exception as error:  # noqa: BLE001 - extension failures are normalized
             result = ToolExecutionResult(
                 call_id=call_id,
