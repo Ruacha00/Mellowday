@@ -30,6 +30,7 @@ from .extensions import (
     UndoMetadata,
     validate_tool_arguments,
 )
+from .events import RuntimeEventLog
 from .history import ConversationHistory
 from .provider import ModelProvider, ProviderFailure, ProviderRequest
 from .types import (
@@ -60,6 +61,7 @@ class AgentCore:
         system_instructions_provider: Callable[[], str] | None = None,
         provider_failure_content_provider: Callable[[ProviderFailure], str]
         | None = None,
+        runtime_events: RuntimeEventLog | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if max_provider_steps < 1:
@@ -86,6 +88,7 @@ class AgentCore:
         self._max_tool_calls = max_tool_calls
         self._audit = AuditLog(audit_path)
         self._event_sequence = self._audit.last_sequence
+        self._runtime_events = runtime_events
         self._tools: dict[str, Tool] = {}
         for tool in tools:
             if tool.name in self._tools:
@@ -121,7 +124,11 @@ class AgentCore:
     def list_pending_confirmations(self) -> tuple[PendingConfirmation, ...]:
         """Return pending confirmations without exposing executable state."""
 
-        return self._confirmations.pending(now=self._clock())
+        now = self._clock()
+        return (
+            *self._confirmations.pending(now=now),
+            *self._history_reset_confirmations.pending(now=now),
+        )
 
     def list_audit_events(self) -> tuple[RuntimeEvent, ...]:
         """Return neutral action and runtime history in sequence order."""
@@ -497,6 +504,12 @@ class AgentCore:
             conversation_id=conversation_id,
             details=details,
         )
+        if self._runtime_events is not None:
+            self._runtime_events.emit(
+                event_type,
+                conversation_id=conversation_id,
+                **details,
+            )
         self._audit.append(event)
         return event
 

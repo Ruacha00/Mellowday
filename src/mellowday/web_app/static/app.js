@@ -29,10 +29,29 @@ const resetConfirmation = document.querySelector("#reset-confirmation");
 const cancelReset = document.querySelector("#cancel-reset");
 const confirmReset = document.querySelector("#confirm-reset");
 const refreshHistory = document.querySelector("#refresh-history");
+const refreshOperations = document.querySelector("#refresh-operations");
+const backendStatus = document.querySelector("#backend-status");
+const providerStatus = document.querySelector("#provider-status");
+const sessionStatus = document.querySelector("#session-status");
+const eventTypeFilter = document.querySelector("#event-type-filter");
+const eventConversationFilter = document.querySelector("#event-conversation-filter");
+const refreshEvents = document.querySelector("#refresh-events");
+const runtimeEventList = document.querySelector("#runtime-event-list");
+const logLevelFilter = document.querySelector("#log-level-filter");
+const logSearchFilter = document.querySelector("#log-search-filter");
+const refreshLogs = document.querySelector("#refresh-logs");
+const runtimeLogList = document.querySelector("#runtime-log-list");
+const diagnosticForm = document.querySelector("#diagnostic-form");
+const diagnosticMessage = document.querySelector("#diagnostic-message");
+const diagnosticResult = document.querySelector("#diagnostic-result");
+const recentConfirmationList = document.querySelector("#recent-confirmation-list");
 
 const activeConversationId = "main";
 let selectedConversationId = null;
 let pendingResetConfirmation = null;
+let eventCursor = 0;
+let logCursor = 0;
+let operationsPoll = null;
 
 function makeEmptyState(content) {
   const empty = document.createElement("p");
@@ -758,7 +777,11 @@ function renderConfirmations(confirmations) {
           settingsStatus.textContent = `Confirmation ${
             decision === "accept" ? "accepted" : "rejected"
           }.`;
-          await Promise.all([loadConfirmations(), loadAuditHistory()]);
+          await Promise.all([
+            loadConfirmations(),
+            loadRecentConfirmations(),
+            loadAuditHistory(),
+          ]);
         } catch (error) {
           settingsStatus.textContent = "The confirmation decision could not be applied.";
           for (const control of actions.querySelectorAll("button")) {
@@ -780,6 +803,172 @@ async function loadConfirmations() {
   const payload = await response.json();
   renderConfirmations(payload.confirmations);
 }
+
+function renderRecentConfirmations(confirmations) {
+  recentConfirmationList.replaceChildren();
+  if (confirmations.length === 0) {
+    recentConfirmationList.append(makeEmptyState("No recent decisions."));
+    return;
+  }
+  for (const confirmation of [...confirmations].reverse()) {
+    const item = document.createElement("p");
+    item.className = "runtime-record";
+    const tool = document.createElement("code");
+    tool.textContent = confirmation.tool;
+    const state = document.createElement("span");
+    state.textContent = confirmation.status;
+    const occurred = document.createElement("time");
+    occurred.dateTime = new Date(confirmation.decided_at * 1000).toISOString();
+    occurred.textContent = new Date(
+      confirmation.decided_at * 1000,
+    ).toLocaleTimeString();
+    item.append(tool, state, occurred);
+    recentConfirmationList.append(item);
+  }
+}
+
+async function loadRecentConfirmations() {
+  const response = await fetch("/api/settings/confirmations/recent");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderRecentConfirmations(payload.confirmations);
+}
+
+async function loadOperationStatus() {
+  const response = await fetch("/api/settings/status");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  backendStatus.textContent = payload.backend.ok ? "Healthy" : "Unavailable";
+  providerStatus.textContent = payload.provider.name;
+  sessionStatus.textContent = `${payload.sessions} conversation${
+    payload.sessions === 1 ? "" : "s"
+  }`;
+}
+
+function appendRuntimeRecords(list, records, formatter, replace) {
+  if (replace) list.replaceChildren();
+  for (const record of records) {
+    const item = document.createElement("li");
+    item.className = "runtime-record";
+    formatter(item, record);
+    list.append(item);
+  }
+  if (replace && records.length === 0) {
+    const item = document.createElement("li");
+    item.className = "empty-capability";
+    item.textContent = "No matching records.";
+    list.append(item);
+  }
+}
+
+async function loadRuntimeEvents({ incremental = false } = {}) {
+  const query = new URLSearchParams({
+    since: String(incremental ? eventCursor : 0),
+    limit: "100",
+  });
+  if (eventTypeFilter.value) query.set("type", eventTypeFilter.value);
+  if (eventConversationFilter.value.trim()) {
+    query.set("conversation_id", eventConversationFilter.value.trim());
+  }
+  const response = await fetch(`/api/events/recent?${query}`);
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  appendRuntimeRecords(
+    runtimeEventList,
+    payload.events,
+    (item, event) => {
+      const type = document.createElement("code");
+      type.textContent = event.type;
+      const context = document.createElement("span");
+      context.textContent = event.conversation_id || "Agent Core";
+      item.append(type, context);
+    },
+    !incremental,
+  );
+  eventCursor = payload.cursor;
+}
+
+async function loadRuntimeLogs({ incremental = false } = {}) {
+  const query = new URLSearchParams({
+    since: String(incremental ? logCursor : 0),
+    limit: "100",
+  });
+  if (logLevelFilter.value) query.set("level", logLevelFilter.value);
+  if (logSearchFilter.value.trim()) query.set("q", logSearchFilter.value.trim());
+  const response = await fetch(`/api/logs/recent?${query}`);
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  appendRuntimeRecords(
+    runtimeLogList,
+    payload.logs,
+    (item, record) => {
+      const level = document.createElement("code");
+      level.textContent = record.level;
+      const message = document.createElement("span");
+      message.textContent = record.message;
+      item.append(level, message);
+    },
+    !incremental,
+  );
+  logCursor = payload.cursor;
+}
+
+async function loadOperations() {
+  await Promise.all([
+    loadOperationStatus(),
+    loadRuntimeEvents(),
+    loadRuntimeLogs(),
+  ]);
+}
+
+refreshOperations.addEventListener("click", async () => {
+  try {
+    await loadOperations();
+    settingsStatus.textContent = "Operational data is up to date.";
+  } catch (error) {
+    settingsStatus.textContent = "Operational data is unavailable.";
+  }
+});
+
+refreshEvents.addEventListener("click", async () => {
+  try {
+    await loadRuntimeEvents();
+  } catch (error) {
+    settingsStatus.textContent = "Runtime events are unavailable.";
+  }
+});
+
+refreshLogs.addEventListener("click", async () => {
+  try {
+    await loadRuntimeLogs();
+  } catch (error) {
+    settingsStatus.textContent = "Runtime logs are unavailable.";
+  }
+});
+
+diagnosticForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = diagnosticForm.querySelector('button[type="submit"]');
+  button.disabled = true;
+  diagnosticResult.textContent = "Running diagnostic probe.";
+  try {
+    const response = await fetch("/api/settings/diagnostics/probe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: diagnosticMessage.value }),
+    });
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const payload = await response.json();
+    diagnosticResult.textContent = `${payload.turn.stop_reason} · ${
+      payload.duration_ms
+    } ms · ${payload.turn.chat_content.content}`;
+    await Promise.all([loadOperationStatus(), loadRuntimeEvents()]);
+  } catch (error) {
+    diagnosticResult.textContent = "Diagnostic probe failed.";
+  } finally {
+    button.disabled = false;
+  }
+});
 
 function renderAuditHistory(events) {
   auditList.replaceChildren();
@@ -838,7 +1027,9 @@ async function loadSettings() {
       loadConversations(),
       loadCapabilities(),
       loadConfirmations(),
+      loadRecentConfirmations(),
       loadAuditHistory(),
+      loadOperations(),
     ]);
     settingsStatus.textContent = "Settings data is up to date.";
   } catch (error) {
@@ -851,9 +1042,23 @@ settingsToggle.addEventListener("click", () => {
   settingsPanel.hidden = false;
   settingsToggle.setAttribute("aria-expanded", "true");
   loadSettings();
+  if (operationsPoll !== null) window.clearInterval(operationsPoll);
+  operationsPoll = window.setInterval(async () => {
+    try {
+      await Promise.all([
+        loadOperationStatus(),
+        loadRuntimeEvents({ incremental: true }),
+        loadRuntimeLogs({ incremental: true }),
+      ]);
+    } catch (error) {
+      settingsStatus.textContent = "Live operational updates are unavailable.";
+    }
+  }, 1500);
 });
 
 settingsClose.addEventListener("click", () => {
+  if (operationsPoll !== null) window.clearInterval(operationsPoll);
+  operationsPoll = null;
   settingsPanel.hidden = true;
   conversation.hidden = false;
   settingsToggle.setAttribute("aria-expanded", "false");

@@ -1,6 +1,7 @@
 import socket
 import threading
 import time
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -410,6 +411,9 @@ def test_user_can_reject_pending_confirmation_from_settings(
         expect(page.locator("#settings-status")).to_have_text(
             "Confirmation rejected."
         )
+        expect(page.locator("#recent-confirmation-list")).to_contain_text(
+            "rejected"
+        )
 
         page.get_by_role("button", name="Back to conversation").click()
         expect(page.locator('[data-role="assistant"] p').last).to_have_text(
@@ -486,4 +490,59 @@ def test_user_can_inspect_undo_metadata_in_audit_history(tmp_path: Path) -> None
         expect(undo).to_be_visible()
         undo.click()
         expect(page.locator("#audit-list").get_by_text("delete_note")).to_be_visible()
+        browser.close()
+
+
+def test_user_can_operate_and_diagnose_from_integrated_settings(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        page.get_by_label("Message").fill("ordinary history")
+        page.get_by_role("button", name="Send").click()
+        expect(page.locator('[data-role="assistant"] p').last).to_have_text(
+            "I heard: ordinary history"
+        )
+
+        page.get_by_role("button", name="Settings").click()
+        expect(page.get_by_role("heading", name="Service status")).to_be_visible()
+        expect(page.get_by_text("Healthy", exact=True)).to_be_visible()
+        expect(page.get_by_text("fake", exact=True)).to_be_visible()
+        expect(page.get_by_text("1 conversation", exact=True)).to_be_visible()
+
+        page.get_by_label("Diagnostic input").fill("probe the core")
+        page.get_by_role("button", name="Run diagnostic probe").click()
+        expect(page.locator("#diagnostic-result")).to_contain_text(
+            "I heard: probe the core"
+        )
+        expect(page.locator("#conversation-list")).not_to_contain_text(
+            "diagnostic-probe"
+        )
+
+        page.get_by_label("Event type").select_option("turn_completed")
+        page.get_by_role("button", name="Refresh runtime events").click()
+        expect(page.locator("#runtime-event-list")).to_contain_text(
+            "turn_completed"
+        )
+
+        logging.getLogger("mellowday.browser_test").warning(
+            "browser diagnostics marker"
+        )
+        page.get_by_label("Minimum log level").select_option("WARNING")
+        page.get_by_label("Log search").fill("marker")
+        page.get_by_role("button", name="Refresh runtime logs").click()
+        expect(page.locator("#runtime-log-list")).to_contain_text(
+            "browser diagnostics marker"
+        )
+        page.route("**/api/logs/recent*", lambda route: route.abort())
+        page.get_by_role("button", name="Refresh runtime logs").click()
+        expect(page.locator("#settings-status")).to_contain_text("unavailable.")
         browser.close()

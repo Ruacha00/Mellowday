@@ -1,11 +1,14 @@
 """Browser-facing Web App boundary."""
 
+import asyncio
+import logging
+import time
 from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
-from typing import Literal, assert_never
+from typing import Literal, assert_never, cast
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -37,6 +40,7 @@ from .provider_settings import (
     SQLiteProviderConfigurationStore,
     build_openai_compatible_provider,
 )
+from .operations import install_log_buffer
 
 
 _STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
@@ -94,6 +98,10 @@ class ConversationResetDecisionBody(ConfirmationDecisionBody):
     confirmation_id: str
 
 
+class DiagnosticProbeBody(BaseModel):
+    content: str = Field(min_length=1, max_length=4_000)
+
+
 def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
     return ConfirmationBinding(
         user_id=body.user_id,
@@ -132,12 +140,15 @@ def create_app(
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
+    registered_tools = tuple(tools)
+    registered_skills = tuple(skills)
     database_path = (
         Path(conversation_database_path)
         if conversation_database_path is not None
         else Path.cwd() / "data" / "mellowday.sqlite3"
     )
     runtime_events = RuntimeEventLog()
+    log_buffer = install_log_buffer()
     conversation_history = SQLiteConversationHistory(
         database_path, events=runtime_events
     )
@@ -153,8 +164,8 @@ def create_app(
         selected_provider = provider
     agent_core = AgentCore(
         provider=selected_provider,
-        tools=tools,
-        skills=skills,
+        tools=registered_tools,
+        skills=registered_skills,
         skill_state_path=skill_state_path,
         audit_path=audit_path,
         conversation_history=conversation_history,
@@ -164,7 +175,22 @@ def create_app(
         provider_failure_content_provider=(
             lambda error: persona_store.get().provider_failure_chat_content(error.code)
         ),
+        runtime_events=runtime_events,
     )
+    diagnostic_core = AgentCore(
+        provider=selected_provider,
+        tools=(),
+        skills=registered_skills,
+        skill_state_path=None,
+        audit_path=None,
+        conversation_history=None,
+        system_instructions_provider=lambda: persona_store.get().chat_instructions(),
+        provider_failure_content_provider=(
+            lambda error: persona_store.get().provider_failure_chat_content(error.code)
+        ),
+        runtime_events=runtime_events,
+    )
+    diagnostic_lock = asyncio.Lock()
     app = FastAPI(title="Mellowday", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=_STATIC_DIRECTORY), name="static")
 
@@ -189,6 +215,37 @@ def create_app(
     @app.get("/healthz")
     async def health() -> dict[str, bool]:
         return {"ok": True}
+
+    @app.get("/api/settings/status")
+    async def operation_status() -> dict[str, object]:
+        selected_configuration = provider_store.selected()
+        if selected_configuration is not None:
+            provider_status: dict[str, object] = {
+                "id": selected_configuration.id,
+                "name": selected_configuration.name,
+                "model": selected_configuration.model,
+                "enabled": selected_configuration.enabled,
+                "configured": True,
+            }
+        else:
+            provider_status = {
+                "name": selected_provider.name,
+                "configured": provider is not None,
+                "enabled": provider is not None,
+            }
+        return {
+            "backend": {"ok": True, "service": "mellowday"},
+            "provider": provider_status,
+            "sessions": conversation_history.count_conversations(),
+            "pending_confirmations": len(
+                agent_core.list_pending_confirmations()
+            ),
+            "tools": len(agent_core.list_tools()),
+            "skills": len(agent_core.list_skills()),
+            "event_cursor": runtime_events.cursor,
+            "log_cursor": log_buffer.cursor,
+            "single_user": True,
+        }
 
     @app.get("/api/settings/capabilities")
     async def capability_settings() -> dict[str, object]:
@@ -251,6 +308,56 @@ def create_app(
             )
         )
         return asdict(result)
+
+    @app.post("/api/settings/diagnostics/probe")
+    async def diagnostic_probe(body: DiagnosticProbeBody) -> dict[str, object]:
+        started = time.monotonic()
+        async with diagnostic_lock:
+            cursor = runtime_events.cursor
+            try:
+                result = await diagnostic_core.run_turn(
+                    TurnRequest(
+                        conversation_id="diagnostic-probe",
+                        messages=(
+                            ChatContent(role="user", content=body.content.strip()),
+                        ),
+                    )
+                )
+            except Exception as error:
+                logging.getLogger("mellowday.web_app").error(
+                    "Diagnostic probe failed: %s", type(error).__name__
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "diagnostic_probe_failed"},
+                ) from error
+            events = runtime_events.query(since=cursor, limit=200)
+        return {
+            "turn": asdict(result),
+            "duration_ms": int((time.monotonic() - started) * 1_000),
+            "events": [asdict(event) for event in events],
+        }
+
+    @app.get("/api/settings/confirmations/recent")
+    async def recent_confirmation_decisions() -> dict[str, object]:
+        decisions = []
+        for event in agent_core.list_audit_events():
+            if event.type not in {"confirmation_accepted", "confirmation_rejected"}:
+                continue
+            decisions.append(
+                {
+                    "confirmation_id": event.details.get("confirmation_id", ""),
+                    "conversation_id": event.conversation_id,
+                    "decided_at": event.occurred_at,
+                    "status": (
+                        "accepted"
+                        if event.type == "confirmation_accepted"
+                        else "rejected"
+                    ),
+                    "tool": event.details.get("tool", ""),
+                }
+            )
+        return {"confirmations": decisions[-50:]}
 
     @app.get("/api/conversations")
     async def list_conversations() -> dict[str, object]:
@@ -388,11 +495,43 @@ def create_app(
         return {"confirmation": asdict(confirmation), "event": asdict(event)}
 
     @app.get("/api/events/recent")
-    async def recent_events(limit: int = 100) -> dict[str, object]:
+    async def recent_events(
+        since: int = Query(default=0, ge=0),
+        limit: int = Query(default=100, ge=1, le=200),
+        event_type: str = Query(default="", alias="type"),
+        conversation_id: str = "",
+    ) -> dict[str, object]:
+        events = runtime_events.query(
+            since=since,
+            limit=limit,
+            event_type=event_type,
+            conversation_id=conversation_id,
+        )
         return {
-            "events": [
-                asdict(event) for event in runtime_events.recent(limit=limit)
-            ]
+            "events": [asdict(event) for event in events],
+            "cursor": events[-1].sequence if events else runtime_events.cursor,
+        }
+
+    @app.get("/api/logs/recent")
+    async def recent_logs(
+        since: int = Query(default=0, ge=0),
+        limit: int = Query(default=200, ge=1, le=200),
+        level: Literal["", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "",
+        q: str = "",
+    ) -> dict[str, object]:
+        logs = log_buffer.query(
+            since=since,
+            limit=limit,
+            minimum_level=level,
+            contains=q,
+        )
+        return {
+            "logs": list(logs),
+            "cursor": (
+                cast(int, logs[-1]["sequence"])
+                if logs
+                else log_buffer.cursor
+            ),
         }
 
     return app

@@ -182,8 +182,18 @@ def test_provider_credentials_never_appear_in_chat_events_or_diagnostics(
             events = await client.get("/api/events/recent")
             diagnostics = await client.get("/healthz")
             settings = await client.get("/api/settings/providers")
+            operation_status = await client.get("/api/settings/status")
+            logs = await client.get("/api/logs/recent")
 
-        outputs = (chat, audit, events, diagnostics, settings)
+        outputs = (
+            chat,
+            audit,
+            events,
+            diagnostics,
+            settings,
+            operation_status,
+            logs,
+        )
         assert all(secret not in response.text for response in outputs)
         assert chat.json()["stop_reason"] == "provider_error"
         assert "rejected its credentials" in chat.json()["chat_content"]["content"]
