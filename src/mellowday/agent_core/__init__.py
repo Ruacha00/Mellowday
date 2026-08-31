@@ -38,7 +38,15 @@ from .history import (
     SQLiteConversationHistory,
     StoredConversation,
 )
-from .provider import FakeProvider, ModelProvider, ProviderReply, ProviderRequest
+from .provider import (
+    FakeProvider,
+    ModelProvider,
+    ProviderFailure,
+    ProviderReply,
+    ProviderRequest,
+    ProviderStopReason,
+    ProviderUsage,
+)
 from .types import ChatContent, EventType, RuntimeEvent, TurnRequest, TurnResult
 
 __all__ = [
@@ -63,6 +71,9 @@ __all__ = [
     "PendingConfirmation",
     "ProviderReply",
     "ProviderRequest",
+    "ProviderFailure",
+    "ProviderStopReason",
+    "ProviderUsage",
     "RiskClassification",
     "RuntimeEvent",
     "RuntimeEventLog",

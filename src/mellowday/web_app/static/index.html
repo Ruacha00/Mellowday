@@ -93,6 +93,139 @@
 
         <p id="settings-status" class="settings-status" role="status"></p>
 
+        <section class="operations-dashboard" aria-labelledby="service-status-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Local operations</p>
+              <h3 id="service-status-title">Service status</h3>
+              <p class="capability-description">
+                Inspect the backend, selected Provider, and recent runtime activity.
+              </p>
+            </div>
+            <button id="refresh-operations" class="text-button" type="button">
+              Refresh operations
+            </button>
+          </header>
+
+          <dl id="service-status" class="operation-summary">
+            <div><dt>Backend</dt><dd id="backend-status">Loading</dd></div>
+            <div><dt>Provider</dt><dd id="provider-status">Loading</dd></div>
+            <div><dt>Sessions</dt><dd id="session-status">Loading</dd></div>
+          </dl>
+
+          <div class="operations-grid">
+            <section class="operation-console" aria-labelledby="runtime-events-title">
+              <h4 id="runtime-events-title">Runtime events</h4>
+              <div class="operation-filters">
+                <label>
+                  <span>Event type</span>
+                  <select id="event-type-filter">
+                    <option value="">All event types</option>
+                    <option value="turn_completed">turn_completed</option>
+                    <option value="provider_failed">provider_failed</option>
+                    <option value="confirmation_pending">confirmation_pending</option>
+                    <option value="confirmation_accepted">confirmation_accepted</option>
+                    <option value="confirmation_rejected">confirmation_rejected</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Conversation</span>
+                  <input id="event-conversation-filter" autocomplete="off" />
+                </label>
+                <button id="refresh-events" class="text-button" type="button">
+                  Refresh runtime events
+                </button>
+              </div>
+              <ol id="runtime-event-list" class="runtime-list"></ol>
+            </section>
+
+            <section class="operation-console" aria-labelledby="runtime-logs-title">
+              <h4 id="runtime-logs-title">Runtime logs</h4>
+              <div class="operation-filters">
+                <label>
+                  <span>Minimum log level</span>
+                  <select id="log-level-filter">
+                    <option value="">All levels</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Log search</span>
+                  <input id="log-search-filter" type="search" autocomplete="off" />
+                </label>
+                <button id="refresh-logs" class="text-button" type="button">
+                  Refresh runtime logs
+                </button>
+              </div>
+              <ol id="runtime-log-list" class="runtime-list"></ol>
+            </section>
+          </div>
+
+          <form id="diagnostic-form" class="diagnostic-form">
+            <label for="diagnostic-message">Diagnostic input</label>
+            <textarea id="diagnostic-message" rows="2" required></textarea>
+            <button type="submit">Run diagnostic probe</button>
+            <div id="diagnostic-result" aria-label="Diagnostic result"></div>
+          </form>
+        </section>
+
+        <section class="provider-settings" aria-labelledby="provider-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Replaceable inference</p>
+              <h3 id="provider-settings-title">Model Providers</h3>
+              <p class="capability-description">
+                Configure OpenAI-compatible endpoints. Credentials stay local and
+                are masked in Settings.
+              </p>
+            </div>
+            <span class="local-badge">Local credentials</span>
+          </header>
+
+          <form id="provider-form" class="provider-form">
+            <input name="provider_id" type="hidden" />
+            <label>
+              <span>Provider name</span>
+              <input name="name" autocomplete="off" required />
+            </label>
+            <label>
+              <span>Base URL</span>
+              <input name="base_url" type="url" autocomplete="off" required />
+            </label>
+            <label>
+              <span>Model</span>
+              <input name="model" autocomplete="off" required />
+            </label>
+            <label>
+              <span>API key</span>
+              <input
+                name="api_key"
+                type="password"
+                autocomplete="new-password"
+                aria-label="API key"
+              />
+              <small>Leave blank while editing to keep the stored credential.</small>
+            </label>
+            <label>
+              <span>Timeout (seconds)</span>
+              <input name="timeout_seconds" type="number" min="1" value="60" required />
+            </label>
+            <label>
+              <span>Maximum retries</span>
+              <input name="max_retries" type="number" min="0" max="10" value="2" required />
+            </label>
+            <div class="provider-form-actions">
+              <button type="submit">Add Provider</button>
+              <button id="cancel-provider-edit" class="text-button" type="button" hidden>
+                Cancel edit
+              </button>
+            </div>
+          </form>
+          <div id="provider-list" class="provider-list"></div>
+        </section>
+
         <section class="persona-settings" aria-labelledby="persona-settings-title">
           <header class="history-settings-heading">
             <div>
@@ -214,6 +347,8 @@
               <span id="confirmation-count" class="count-mark">0</span>
             </div>
             <div id="confirmation-list" class="capability-list"></div>
+            <h4 class="recent-confirmations-title">Recent decisions</h4>
+            <div id="recent-confirmation-list" class="capability-list"></div>
           </section>
 
           <section class="capability-section" aria-labelledby="audit-title">

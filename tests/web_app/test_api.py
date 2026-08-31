@@ -204,7 +204,11 @@ def test_settings_resets_only_selected_history_and_reports_structured_events(
             after_reset = await client.get("/api/events/recent")
 
         assert before_reset.status_code == 200
-        before_types = [event["type"] for event in before_reset.json()["events"]]
+        before_types = [
+            event["type"]
+            for event in before_reset.json()["events"]
+            if event["type"].startswith("conversation_history_")
+        ]
         assert before_types == [
             "conversation_history_initialized",
             "conversation_history_loaded",
@@ -526,6 +530,9 @@ def test_settings_inspects_and_accepts_pending_confirmation(tmp_path: Path) -> N
                     "binding": confirmation["binding"],
                 },
             )
+            recent_decisions = await client.get(
+                "/api/settings/confirmations/recent"
+            )
             audit = await client.get("/api/settings/audit")
 
         assert chat.status_code == 200
@@ -546,6 +553,18 @@ def test_settings_inspects_and_accepts_pending_confirmation(tmp_path: Path) -> N
         assert decided.json()["turn"]["chat_content"]["content"] == (
             "The note is gone."
         )
+        assert recent_decisions.status_code == 200
+        assert recent_decisions.json()["confirmations"] == [
+            {
+                "confirmation_id": confirmation["id"],
+                "conversation_id": "conversation-1",
+                "decided_at": recent_decisions.json()["confirmations"][0][
+                    "decided_at"
+                ],
+                "status": "accepted",
+                "tool": "erase_note",
+            }
+        ]
         assert executions == [{"note_id": "note-1"}]
         event_types = [event["type"] for event in audit.json()["events"]]
         assert "confirmation_pending" in event_types

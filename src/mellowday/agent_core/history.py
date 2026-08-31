@@ -230,6 +230,16 @@ class SQLiteConversationHistory:
         self._emit("conversation_history_listed", conversation_count=len(summaries))
         return summaries
 
+    def count_conversations(self) -> int:
+        """Return a status count without adding noise to the runtime event trail."""
+
+        with self._diagnose("list"):
+            with self._connect() as connection:
+                row = connection.execute(
+                    "SELECT COUNT(*) AS conversation_count FROM conversations"
+                ).fetchone()
+        return int(row["conversation_count"])
+
     def get_conversation(self, conversation_id: str) -> StoredConversation | None:
         with self._diagnose("read", conversation_id=conversation_id):
             with self._connect() as connection:

@@ -1,14 +1,17 @@
 """Browser-facing Web App boundary."""
 
+import asyncio
+import logging
+import time
 from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
-from typing import Literal, assert_never
+from typing import Literal, assert_never, cast
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from mellowday.agent_core import (
     AgentCore,
@@ -18,15 +21,27 @@ from mellowday.agent_core import (
     ConfirmationError,
     ConfirmationErrorCode,
     ConversationHistoryError,
-    FakeProvider,
+    EventType,
     ModelProvider,
+    ProviderFailure,
     RuntimeEventLog,
     Skill,
     SQLiteConversationHistory,
     Tool,
     TurnRequest,
 )
+from mellowday.agent_core.openai_compatible import (
+    HttpxProviderTransport,
+    ProviderTransport,
+)
 from mellowday.personal_assistant import Persona, SQLitePersonaStore
+
+from .provider_settings import (
+    SelectedProvider,
+    SQLiteProviderConfigurationStore,
+    build_openai_compatible_provider,
+)
+from .operations import install_log_buffer
 
 
 _STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
@@ -53,6 +68,15 @@ class PersonaBody(BaseModel):
     proactive_chat_style: str
 
 
+class ProviderConfigurationBody(BaseModel):
+    name: str = Field(min_length=1)
+    base_url: str = Field(pattern=r"^https?://")
+    model: str = Field(min_length=1)
+    api_key: str
+    timeout_seconds: float = Field(default=60, gt=0)
+    max_retries: int = Field(default=2, ge=0, le=10)
+
+
 class ConfirmationChatContentBody(BaseModel):
     role: Literal["user", "assistant"]
     content: str
@@ -73,6 +97,10 @@ class ConfirmationDecisionBody(BaseModel):
 
 class ConversationResetDecisionBody(ConfirmationDecisionBody):
     confirmation_id: str
+
+
+class DiagnosticProbeBody(BaseModel):
+    content: str = Field(min_length=1, max_length=4_000)
 
 
 def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
@@ -109,31 +137,60 @@ def create_app(
     conversation_database_path: str | Path | None = None,
     history_message_limit: int = 40,
     history_character_limit: int = 12_000,
+    provider_transport: ProviderTransport | None = None,
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
-    selected_provider = provider if provider is not None else FakeProvider()
+    registered_tools = tuple(tools)
+    registered_skills = tuple(skills)
     database_path = (
         Path(conversation_database_path)
         if conversation_database_path is not None
         else Path.cwd() / "data" / "mellowday.sqlite3"
     )
     runtime_events = RuntimeEventLog()
+    log_buffer = install_log_buffer()
     conversation_history = SQLiteConversationHistory(
         database_path, events=runtime_events
     )
     persona_store = SQLitePersonaStore(database_path)
+    provider_store = SQLiteProviderConfigurationStore(database_path)
+    provider_health: dict[str, dict[str, object]] = {}
+    configured_provider_transport = provider_transport or HttpxProviderTransport()
+    if provider is None:
+        selected_provider: ModelProvider = SelectedProvider(
+            provider_store,
+            configured_provider_transport,
+        )
+    else:
+        selected_provider = provider
     agent_core = AgentCore(
         provider=selected_provider,
-        tools=tools,
-        skills=skills,
+        tools=registered_tools,
+        skills=registered_skills,
         skill_state_path=skill_state_path,
         audit_path=audit_path,
         conversation_history=conversation_history,
         history_message_limit=history_message_limit,
         history_character_limit=history_character_limit,
         system_instructions_provider=lambda: persona_store.get().chat_instructions(),
+        provider_failure_content_provider=(
+            lambda error: persona_store.get().provider_failure_chat_content(error.code)
+        ),
+        runtime_events=runtime_events,
     )
+    diagnostic_core = AgentCore(
+        provider=selected_provider,
+        tools=(),
+        skills=registered_skills,
+        skill_state_path=None,
+        audit_path=None,
+        conversation_history=None,
+        system_instructions_provider=None,
+        provider_failure_content_provider=lambda _error: "Provider call failed.",
+        runtime_events=runtime_events,
+    )
+    diagnostic_lock = asyncio.Lock()
     app = FastAPI(title="Mellowday", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=_STATIC_DIRECTORY), name="static")
 
@@ -158,6 +215,41 @@ def create_app(
     @app.get("/healthz")
     async def health() -> dict[str, bool]:
         return {"ok": True}
+
+    @app.get("/api/settings/status")
+    async def operation_status() -> dict[str, object]:
+        selected_configuration = provider_store.selected()
+        if selected_configuration is not None:
+            provider_status: dict[str, object] = {
+                "id": selected_configuration.id,
+                "name": selected_configuration.name,
+                "model": selected_configuration.model,
+                "enabled": selected_configuration.enabled,
+                "configured": True,
+                "health": provider_health.get(
+                    selected_configuration.id, {"state": "not_checked"}
+                ),
+            }
+        else:
+            provider_status = {
+                "name": selected_provider.name,
+                "configured": provider is not None,
+                "enabled": provider is not None,
+                "health": {"state": "not_checked"},
+            }
+        return {
+            "backend": {"ok": True, "service": "mellowday"},
+            "provider": provider_status,
+            "sessions": conversation_history.count_conversations(),
+            "pending_confirmations": len(
+                agent_core.list_pending_confirmations()
+            ),
+            "tools": len(agent_core.list_tools()),
+            "skills": len(agent_core.list_skills()),
+            "event_cursor": runtime_events.cursor,
+            "log_cursor": log_buffer.cursor,
+            "single_user": True,
+        }
 
     @app.get("/api/settings/capabilities")
     async def capability_settings() -> dict[str, object]:
@@ -221,6 +313,60 @@ def create_app(
         )
         return asdict(result)
 
+    @app.post("/api/settings/diagnostics/probe")
+    async def diagnostic_probe(body: DiagnosticProbeBody) -> dict[str, object]:
+        started = time.monotonic()
+        async with diagnostic_lock:
+            cursor = runtime_events.cursor
+            try:
+                result = await diagnostic_core.run_turn(
+                    TurnRequest(
+                        conversation_id="diagnostic-probe",
+                        messages=(
+                            ChatContent(role="user", content=body.content.strip()),
+                        ),
+                    )
+                )
+            except Exception as error:
+                logging.getLogger("mellowday.web_app").error(
+                    "Diagnostic probe failed: %s", type(error).__name__
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "diagnostic_probe_failed"},
+                ) from error
+            events = runtime_events.query(
+                since=cursor,
+                limit=200,
+                conversation_id="diagnostic-probe",
+            )
+        return {
+            "turn": asdict(result),
+            "duration_ms": int((time.monotonic() - started) * 1_000),
+            "events": [asdict(event) for event in events],
+        }
+
+    @app.get("/api/settings/confirmations/recent")
+    async def recent_confirmation_decisions() -> dict[str, object]:
+        decisions = []
+        for event in agent_core.list_audit_events():
+            if event.type not in {"confirmation_accepted", "confirmation_rejected"}:
+                continue
+            decisions.append(
+                {
+                    "confirmation_id": event.details.get("confirmation_id", ""),
+                    "conversation_id": event.conversation_id,
+                    "decided_at": event.occurred_at,
+                    "status": (
+                        "accepted"
+                        if event.type == "confirmation_accepted"
+                        else "rejected"
+                    ),
+                    "tool": event.details.get("tool", ""),
+                }
+            )
+        return {"confirmations": decisions[-50:]}
+
     @app.get("/api/conversations")
     async def list_conversations() -> dict[str, object]:
         return {
@@ -272,6 +418,80 @@ def create_app(
             "event": asdict(event),
         }
 
+    @app.get("/api/settings/providers")
+    async def list_provider_configurations() -> dict[str, object]:
+        return {
+            "providers": [
+                configuration.settings_payload()
+                for configuration in provider_store.list()
+            ]
+        }
+
+    @app.post("/api/settings/providers", status_code=201)
+    async def create_provider_configuration(
+        body: ProviderConfigurationBody,
+    ) -> dict[str, object]:
+        configuration = provider_store.create(**body.model_dump())
+        return {"provider": configuration.settings_payload()}
+
+    @app.put("/api/settings/providers/{provider_id}")
+    async def update_provider_configuration(
+        provider_id: str, body: ProviderConfigurationBody
+    ) -> dict[str, object]:
+        configuration = provider_store.update(provider_id, **body.model_dump())
+        if configuration is None:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        provider_health.pop(provider_id, None)
+        return {"provider": configuration.settings_payload()}
+
+    @app.post("/api/settings/providers/{provider_id}/select")
+    async def select_provider_configuration(provider_id: str) -> dict[str, object]:
+        configuration = provider_store.select(provider_id)
+        if configuration is None:
+            raise HTTPException(
+                status_code=409, detail="Provider is unavailable for selection"
+            )
+        return {"provider": configuration.settings_payload()}
+
+    @app.post("/api/settings/providers/{provider_id}/validate")
+    async def validate_provider_configuration(provider_id: str) -> dict[str, object]:
+        configuration = provider_store.get(provider_id)
+        if configuration is None:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        adapter = build_openai_compatible_provider(
+            configuration, configured_provider_transport
+        )
+        try:
+            await adapter.validate()
+        except ProviderFailure as error:
+            provider_health[provider_id] = {
+                "state": "unavailable",
+                "code": error.code,
+                "checked_at": time.time(),
+            }
+            return {
+                "valid": False,
+                "failure": {
+                    "code": error.code,
+                    "retryable": error.retryable,
+                    "attempts": error.attempts,
+                },
+            }
+        provider_health[provider_id] = {
+            "state": "available",
+            "checked_at": time.time(),
+        }
+        return {"valid": True}
+
+    @app.put("/api/settings/providers/{provider_id}/enabled")
+    async def set_provider_enabled(
+        provider_id: str, body: SkillEnablementBody
+    ) -> dict[str, object]:
+        configuration = provider_store.set_enabled(provider_id, body.enabled)
+        if configuration is None:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        return {"provider": configuration.settings_payload()}
+
     @app.get("/api/settings/persona")
     async def get_persona() -> dict[str, object]:
         return {"persona": asdict(persona_store.get())}
@@ -293,11 +513,43 @@ def create_app(
         return {"confirmation": asdict(confirmation), "event": asdict(event)}
 
     @app.get("/api/events/recent")
-    async def recent_events(limit: int = 100) -> dict[str, object]:
+    async def recent_events(
+        since: int = Query(default=0, ge=0),
+        limit: int = Query(default=100, ge=1, le=200),
+        event_type: EventType | None = Query(default=None, alias="type"),
+        conversation_id: str = "",
+    ) -> dict[str, object]:
+        events = runtime_events.query(
+            since=since,
+            limit=limit,
+            event_type=event_type,
+            conversation_id=conversation_id,
+        )
         return {
-            "events": [
-                asdict(event) for event in runtime_events.recent(limit=limit)
-            ]
+            "events": [asdict(event) for event in events],
+            "cursor": events[-1].sequence if events else runtime_events.cursor,
+        }
+
+    @app.get("/api/logs/recent")
+    async def recent_logs(
+        since: int = Query(default=0, ge=0),
+        limit: int = Query(default=200, ge=1, le=200),
+        level: Literal["", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "",
+        q: str = "",
+    ) -> dict[str, object]:
+        logs = log_buffer.query(
+            since=since,
+            limit=limit,
+            minimum_level=level,
+            contains=q,
+        )
+        return {
+            "logs": list(logs),
+            "cursor": (
+                cast(int, logs[-1]["sequence"])
+                if logs
+                else log_buffer.cursor
+            ),
         }
 
     return app

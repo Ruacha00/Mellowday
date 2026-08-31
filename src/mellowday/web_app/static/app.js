@@ -9,6 +9,9 @@ const settingsToggle = document.querySelector("#settings-toggle");
 const settingsClose = document.querySelector("#settings-close");
 const settingsStatus = document.querySelector("#settings-status");
 const personaForm = document.querySelector("#persona-form");
+const providerForm = document.querySelector("#provider-form");
+const providerList = document.querySelector("#provider-list");
+const cancelProviderEdit = document.querySelector("#cancel-provider-edit");
 const toolList = document.querySelector("#tool-list");
 const skillList = document.querySelector("#skill-list");
 const toolCount = document.querySelector("#tool-count");
@@ -26,10 +29,29 @@ const resetConfirmation = document.querySelector("#reset-confirmation");
 const cancelReset = document.querySelector("#cancel-reset");
 const confirmReset = document.querySelector("#confirm-reset");
 const refreshHistory = document.querySelector("#refresh-history");
+const refreshOperations = document.querySelector("#refresh-operations");
+const backendStatus = document.querySelector("#backend-status");
+const providerStatus = document.querySelector("#provider-status");
+const sessionStatus = document.querySelector("#session-status");
+const eventTypeFilter = document.querySelector("#event-type-filter");
+const eventConversationFilter = document.querySelector("#event-conversation-filter");
+const refreshEvents = document.querySelector("#refresh-events");
+const runtimeEventList = document.querySelector("#runtime-event-list");
+const logLevelFilter = document.querySelector("#log-level-filter");
+const logSearchFilter = document.querySelector("#log-search-filter");
+const refreshLogs = document.querySelector("#refresh-logs");
+const runtimeLogList = document.querySelector("#runtime-log-list");
+const diagnosticForm = document.querySelector("#diagnostic-form");
+const diagnosticMessage = document.querySelector("#diagnostic-message");
+const diagnosticResult = document.querySelector("#diagnostic-result");
+const recentConfirmationList = document.querySelector("#recent-confirmation-list");
 
 const activeConversationId = "main";
 let selectedConversationId = null;
 let pendingResetConfirmation = null;
+let eventCursor = 0;
+let logCursor = 0;
+let operationsPoll = null;
 
 function makeEmptyState(content) {
   const empty = document.createElement("p");
@@ -459,6 +481,191 @@ async function loadPersona() {
   }
 }
 
+function resetProviderForm() {
+  providerForm.reset();
+  providerForm.elements.namedItem("provider_id").value = "";
+  providerForm.elements.namedItem("timeout_seconds").value = "60";
+  providerForm.elements.namedItem("max_retries").value = "2";
+  providerForm.querySelector('button[type="submit"]').textContent = "Add Provider";
+  cancelProviderEdit.hidden = true;
+}
+
+function editProvider(provider) {
+  for (const name of ["name", "base_url", "model", "timeout_seconds", "max_retries"]) {
+    providerForm.elements.namedItem(name).value = provider[name];
+  }
+  providerForm.elements.namedItem("provider_id").value = provider.id;
+  providerForm.elements.namedItem("api_key").value = "";
+  providerForm.querySelector('button[type="submit"]').textContent = "Save Provider";
+  cancelProviderEdit.hidden = false;
+  providerForm.elements.namedItem("name").focus();
+}
+
+function providerAction(label, provider, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = label;
+  button.setAttribute("aria-label", `${label} ${provider.name}`);
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function renderProviders(providers) {
+  providerList.replaceChildren();
+  if (providers.length === 0) {
+    providerList.append(makeEmptyState("No model Providers configured."));
+    return;
+  }
+  for (const provider of providers) {
+    const card = document.createElement("article");
+    card.className = "capability-card provider-card";
+
+    const heading = document.createElement("div");
+    heading.className = "provider-card-heading";
+    const name = document.createElement("code");
+    name.className = "capability-name";
+    name.textContent = provider.name;
+    const selection = document.createElement("span");
+    selection.className = "skill-state";
+    selection.textContent = provider.selected ? "Selected" : "Not selected";
+    heading.append(name, selection);
+
+    const facts = document.createElement("p");
+    facts.className = "capability-description";
+    const model = document.createElement("span");
+    model.textContent = provider.model;
+    const endpoint = document.createElement("span");
+    endpoint.textContent = ` · ${provider.base_url} · `;
+    const credential = document.createElement("span");
+    credential.textContent = provider.api_key || "No credential";
+    facts.append(model, endpoint, credential);
+
+    const state = document.createElement("div");
+    state.className = "provider-state";
+    const enablement = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = provider.enabled;
+    checkbox.setAttribute("aria-label", `Enable ${provider.name} Provider`);
+    const stateText = document.createElement("span");
+    stateText.textContent = provider.enabled ? "Enabled" : "Disabled";
+    enablement.append(checkbox, stateText);
+    state.append(enablement);
+
+    checkbox.addEventListener("change", async () => {
+      checkbox.disabled = true;
+      try {
+        const response = await fetch(
+          `/api/settings/providers/${encodeURIComponent(provider.id)}/enabled`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: checkbox.checked }),
+          },
+        );
+        if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+        settingsStatus.textContent = `${provider.name} is ${
+          checkbox.checked ? "enabled" : "disabled"
+        }.`;
+        await loadProviders();
+      } catch (error) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.disabled = false;
+        settingsStatus.textContent = `${provider.name} could not be updated.`;
+      }
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "provider-actions";
+    actions.append(
+      providerAction("Edit", provider, () => editProvider(provider)),
+      providerAction("Validate", provider, async () => {
+        settingsStatus.textContent = `Validating ${provider.name}.`;
+        try {
+          const response = await fetch(
+            `/api/settings/providers/${encodeURIComponent(provider.id)}/validate`,
+            { method: "POST" },
+          );
+          if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+          const result = await response.json();
+          if (!result.valid) {
+            settingsStatus.textContent = `${provider.name} validation failed: ${result.failure.code}.`;
+            return;
+          }
+          settingsStatus.textContent = `${provider.name} validated.`;
+        } catch (error) {
+          settingsStatus.textContent = `${provider.name} could not be validated.`;
+        }
+      }),
+    );
+    if (!provider.selected) {
+      actions.append(
+        providerAction("Select", provider, async () => {
+          try {
+            const response = await fetch(
+              `/api/settings/providers/${encodeURIComponent(provider.id)}/select`,
+              { method: "POST" },
+            );
+            if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+            settingsStatus.textContent = `${provider.name} selected.`;
+            await loadProviders();
+          } catch (error) {
+            settingsStatus.textContent = `${provider.name} could not be selected.`;
+          }
+        }),
+      );
+    }
+    card.append(heading, facts, state, actions);
+    providerList.append(card);
+  }
+}
+
+async function loadProviders() {
+  const response = await fetch("/api/settings/providers");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderProviders(payload.providers);
+}
+
+providerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const providerId = providerForm.elements.namedItem("provider_id").value;
+  const submitButton = providerForm.querySelector('button[type="submit"]');
+  const body = Object.fromEntries(new FormData(providerForm).entries());
+  delete body.provider_id;
+  body.timeout_seconds = Number(body.timeout_seconds);
+  body.max_retries = Number(body.max_retries);
+  if (!providerId && !body.api_key) {
+    settingsStatus.textContent = "An API key is required for a new Provider.";
+    return;
+  }
+  submitButton.disabled = true;
+  try {
+    const response = await fetch(
+      providerId
+        ? `/api/settings/providers/${encodeURIComponent(providerId)}`
+        : "/api/settings/providers",
+      {
+        method: providerId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const savedName = body.name;
+    resetProviderForm();
+    settingsStatus.textContent = `${savedName} saved.`;
+    await loadProviders();
+  } catch (error) {
+    settingsStatus.textContent = "Provider configuration could not be saved.";
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+cancelProviderEdit.addEventListener("click", resetProviderForm);
+
 personaForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = personaForm.querySelector('button[type="submit"]');
@@ -570,7 +777,11 @@ function renderConfirmations(confirmations) {
           settingsStatus.textContent = `Confirmation ${
             decision === "accept" ? "accepted" : "rejected"
           }.`;
-          await Promise.all([loadConfirmations(), loadAuditHistory()]);
+          await Promise.all([
+            loadConfirmations(),
+            loadRecentConfirmations(),
+            loadAuditHistory(),
+          ]);
         } catch (error) {
           settingsStatus.textContent = "The confirmation decision could not be applied.";
           for (const control of actions.querySelectorAll("button")) {
@@ -592,6 +803,180 @@ async function loadConfirmations() {
   const payload = await response.json();
   renderConfirmations(payload.confirmations);
 }
+
+function renderRecentConfirmations(confirmations) {
+  recentConfirmationList.replaceChildren();
+  if (confirmations.length === 0) {
+    recentConfirmationList.append(makeEmptyState("No recent decisions."));
+    return;
+  }
+  for (const confirmation of [...confirmations].reverse()) {
+    const item = document.createElement("p");
+    item.className = "runtime-record";
+    const tool = document.createElement("code");
+    tool.textContent = confirmation.tool;
+    const state = document.createElement("span");
+    state.textContent = confirmation.status;
+    const occurred = document.createElement("time");
+    occurred.dateTime = new Date(confirmation.decided_at * 1000).toISOString();
+    occurred.textContent = new Date(
+      confirmation.decided_at * 1000,
+    ).toLocaleTimeString();
+    item.append(tool, state, occurred);
+    recentConfirmationList.append(item);
+  }
+}
+
+async function loadRecentConfirmations() {
+  const response = await fetch("/api/settings/confirmations/recent");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderRecentConfirmations(payload.confirmations);
+}
+
+async function loadOperationStatus() {
+  const response = await fetch("/api/settings/status");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  backendStatus.textContent = payload.backend.ok ? "Healthy" : "Unavailable";
+  const health = payload.provider.health?.state || "not_checked";
+  const healthLabel = health
+    .split("_")
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+  providerStatus.textContent = `${payload.provider.name} · ${healthLabel}`;
+  sessionStatus.textContent = `${payload.sessions} conversation${
+    payload.sessions === 1 ? "" : "s"
+  }`;
+}
+
+function appendRuntimeRecords(list, records, formatter, replace) {
+  if (replace) list.replaceChildren();
+  if (!replace && records.length > 0) {
+    list.querySelector(".empty-capability")?.remove();
+  }
+  for (const record of records) {
+    const item = document.createElement("li");
+    item.className = "runtime-record";
+    formatter(item, record);
+    list.append(item);
+  }
+  if (replace && records.length === 0) {
+    const item = document.createElement("li");
+    item.className = "empty-capability";
+    item.textContent = "No matching records.";
+    list.append(item);
+  }
+}
+
+async function loadRuntimeEvents({ incremental = false } = {}) {
+  const query = new URLSearchParams({
+    since: String(incremental ? eventCursor : 0),
+    limit: "100",
+  });
+  if (eventTypeFilter.value) query.set("type", eventTypeFilter.value);
+  if (eventConversationFilter.value.trim()) {
+    query.set("conversation_id", eventConversationFilter.value.trim());
+  }
+  const response = await fetch(`/api/events/recent?${query}`);
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  appendRuntimeRecords(
+    runtimeEventList,
+    payload.events,
+    (item, event) => {
+      const type = document.createElement("code");
+      type.textContent = event.type;
+      const context = document.createElement("span");
+      context.textContent = event.conversation_id || "Agent Core";
+      item.append(type, context);
+    },
+    !incremental,
+  );
+  eventCursor = payload.cursor;
+}
+
+async function loadRuntimeLogs({ incremental = false } = {}) {
+  const query = new URLSearchParams({
+    since: String(incremental ? logCursor : 0),
+    limit: "100",
+  });
+  if (logLevelFilter.value) query.set("level", logLevelFilter.value);
+  if (logSearchFilter.value.trim()) query.set("q", logSearchFilter.value.trim());
+  const response = await fetch(`/api/logs/recent?${query}`);
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  appendRuntimeRecords(
+    runtimeLogList,
+    payload.logs,
+    (item, record) => {
+      const level = document.createElement("code");
+      level.textContent = record.level;
+      const message = document.createElement("span");
+      message.textContent = record.message;
+      item.append(level, message);
+    },
+    !incremental,
+  );
+  logCursor = payload.cursor;
+}
+
+async function loadOperations() {
+  await Promise.all([
+    loadOperationStatus(),
+    loadRuntimeEvents(),
+    loadRuntimeLogs(),
+  ]);
+}
+
+refreshOperations.addEventListener("click", async () => {
+  try {
+    await loadOperations();
+    settingsStatus.textContent = "Operational data is up to date.";
+  } catch (error) {
+    settingsStatus.textContent = `Operational data is unavailable: ${error.message}`;
+  }
+});
+
+refreshEvents.addEventListener("click", async () => {
+  try {
+    await loadRuntimeEvents();
+  } catch (error) {
+    settingsStatus.textContent = `Runtime events are unavailable: ${error.message}`;
+  }
+});
+
+refreshLogs.addEventListener("click", async () => {
+  try {
+    await loadRuntimeLogs();
+  } catch (error) {
+    settingsStatus.textContent = `Runtime logs are unavailable: ${error.message}`;
+  }
+});
+
+diagnosticForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = diagnosticForm.querySelector('button[type="submit"]');
+  button.disabled = true;
+  diagnosticResult.textContent = "Running diagnostic probe.";
+  try {
+    const response = await fetch("/api/settings/diagnostics/probe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: diagnosticMessage.value }),
+    });
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const payload = await response.json();
+    diagnosticResult.textContent = `${payload.turn.stop_reason} · ${
+      payload.duration_ms
+    } ms · ${payload.turn.chat_content.content}`;
+    await Promise.all([loadOperationStatus(), loadRuntimeEvents()]);
+  } catch (error) {
+    diagnosticResult.textContent = `Diagnostic probe failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 function renderAuditHistory(events) {
   auditList.replaceChildren();
@@ -646,10 +1031,13 @@ async function loadSettings() {
   try {
     await Promise.all([
       loadPersona(),
+      loadProviders(),
       loadConversations(),
       loadCapabilities(),
       loadConfirmations(),
+      loadRecentConfirmations(),
       loadAuditHistory(),
+      loadOperations(),
     ]);
     settingsStatus.textContent = "Settings data is up to date.";
   } catch (error) {
@@ -662,9 +1050,25 @@ settingsToggle.addEventListener("click", () => {
   settingsPanel.hidden = false;
   settingsToggle.setAttribute("aria-expanded", "true");
   loadSettings();
+  if (operationsPoll !== null) window.clearInterval(operationsPoll);
+  operationsPoll = window.setInterval(async () => {
+    try {
+      await Promise.all([
+        loadOperationStatus(),
+        loadRuntimeEvents({ incremental: true }),
+        loadRuntimeLogs({ incremental: true }),
+      ]);
+    } catch (error) {
+      settingsStatus.textContent = `Live operational updates are unavailable: ${
+        error.message
+      }`;
+    }
+  }, 1500);
 });
 
 settingsClose.addEventListener("click", () => {
+  if (operationsPoll !== null) window.clearInterval(operationsPoll);
+  operationsPoll = null;
   settingsPanel.hidden = true;
   conversation.hidden = false;
   settingsToggle.setAttribute("aria-expanded", "false");
