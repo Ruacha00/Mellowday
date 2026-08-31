@@ -15,6 +15,8 @@ from mellowday.agent_core import (
     Skill,
     Tool,
     ToolCall,
+    ToolOutcome,
+    UndoMetadata,
 )
 from mellowday.web_app import create_app
 
@@ -50,7 +52,7 @@ def running_server(app: FastAPI) -> Iterator[str]:
 
 
 def test_user_can_chat_from_the_conversation_surface() -> None:
-    app = create_app(provider=FakeProvider())
+    app = create_app(provider=FakeProvider(), audit_path=None)
 
     with running_server(app) as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -101,6 +103,7 @@ def test_user_can_inspect_and_manage_capabilities_from_settings() -> None:
             ),
         ),
         skill_state_path=None,
+        audit_path=None,
     )
 
     with running_server(app) as base_url, sync_playwright() as playwright:
@@ -173,6 +176,7 @@ def test_user_can_reject_pending_confirmation_from_settings() -> None:
                 risk="high",
             ),
         ),
+        audit_path=None,
     )
 
     with running_server(app) as base_url, sync_playwright() as playwright:
@@ -202,4 +206,73 @@ def test_user_can_reject_pending_confirmation_from_settings() -> None:
             "Okay, I left the note where it was."
         )
         assert executions == []
+        browser.close()
+
+
+def test_user_can_inspect_undo_metadata_in_audit_history() -> None:
+    class UndoProvider:
+        name = "undo-script"
+
+        def __init__(self) -> None:
+            self.replies = iter(
+                (
+                    ProviderReply(
+                        tool_calls=(
+                            ToolCall(
+                                "call-save",
+                                "save_note",
+                                {"content": "Buy tea"},
+                            ),
+                        )
+                    ),
+                    ProviderReply(content="I saved the note."),
+                )
+            )
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            return next(self.replies)
+
+    async def save_note(
+        arguments: dict[str, object], conversation_id: str
+    ) -> ToolOutcome:
+        return ToolOutcome(
+            value={"note_id": "note-1", "conversation_id": conversation_id},
+            undo=UndoMetadata(
+                tool="delete_note", arguments={"note_id": "note-1"}
+            ),
+        )
+
+    app = create_app(
+        provider=UndoProvider(),
+        tools=(
+            Tool(
+                name="save_note",
+                description="Save one note.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"content": {"type": "string"}},
+                    "required": ["content"],
+                },
+                executor=save_note,
+                side_effect="reversible",
+            ),
+        ),
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        page.get_by_label("Message").fill("Save a tea note.")
+        page.get_by_role("button", name="Send").click()
+        expect(page.locator('[data-role="assistant"] p').last).to_have_text(
+            "I saved the note."
+        )
+
+        page.get_by_role("button", name="Settings").click()
+        undo = page.get_by_text("Undo available", exact=True)
+        expect(undo).to_be_visible()
+        undo.click()
+        expect(page.locator("#audit-list").get_by_text("delete_note")).to_be_visible()
         browser.close()

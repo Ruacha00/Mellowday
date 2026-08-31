@@ -2,13 +2,13 @@
 
 import json
 import time
-from collections.abc import Callable, Iterable
-from copy import deepcopy
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
 
-from .actions import ExecutionContext, PermissionEngine
+from .actions import ExecutionContext, PermissionDecision, PermissionEngine
+from .audit import AuditLog
 from .confirmations import (
     ConfirmationBinding,
     ConfirmationDecision,
@@ -51,6 +51,7 @@ class AgentCore:
         max_provider_steps: int = 8,
         max_tool_calls: int = 16,
         confirmation_ttl_seconds: float = 600,
+        audit_path: str | Path | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if max_provider_steps < 1:
@@ -63,8 +64,8 @@ class AgentCore:
         self._clock = clock
         self._max_provider_steps = max_provider_steps
         self._max_tool_calls = max_tool_calls
-        self._event_sequence = 0
-        self._audit_events: list[RuntimeEvent] = []
+        self._audit = AuditLog(audit_path)
+        self._event_sequence = self._audit.last_sequence
         self._tools: dict[str, Tool] = {}
         for tool in tools:
             if tool.name in self._tools:
@@ -105,7 +106,7 @@ class AgentCore:
     def list_audit_events(self) -> tuple[RuntimeEvent, ...]:
         """Return neutral action and runtime history in sequence order."""
 
-        return deepcopy(tuple(self._audit_events))
+        return self._audit.events()
 
     async def decide_confirmation(
         self, decision: ConfirmationDecision
@@ -152,12 +153,13 @@ class AgentCore:
             ProviderRequest(
                 messages=binding.initiating_context,
                 tools=self.list_tools(),
-                tool_results=(tool_result,),
+                tool_results=resolution.prior_tool_results + (tool_result,),
                 skills=tuple(
                     metadata
                     for metadata in self.list_skills()
                     if metadata.enabled
                 ),
+                loaded_skills=resolution.loaded_skills,
             )
         )
         emit("provider_completed", provider=self._provider.name)
@@ -216,6 +218,8 @@ class AgentCore:
         provider_steps = 0
         tool_calls = 0
         last_reply_content = ""
+        final_stop_reason: StopReason = "final"
+        clarification_requested = False
         for skill_name in request.requested_skills:
             self._load_skill(skill_name, loaded_skills, emit)
         while True:
@@ -245,6 +249,8 @@ class AgentCore:
             emit("provider_completed", provider=self._provider.name)
             last_reply_content = reply.content.strip()
             if not reply.tool_calls and not reply.selected_skills:
+                if clarification_requested:
+                    final_stop_reason = "clarification"
                 break
             if tool_calls + len(reply.tool_calls) > self._max_tool_calls:
                 return self._limit_result(
@@ -257,6 +263,35 @@ class AgentCore:
             tool_calls += len(reply.tool_calls)
             for skill_name in reply.selected_skills:
                 self._load_skill(skill_name, loaded_skills, emit)
+            clarifying_call = next(
+                (
+                    call
+                    for call in reply.tool_calls
+                    if call.id not in handled_call_ids
+                    and (tool := self._tools.get(call.name)) is not None
+                    and self._permission_decision(tool, call, execution_context)
+                    == "clarify"
+                ),
+                None,
+            )
+            if clarifying_call is not None:
+                handled_call_ids.add(clarifying_call.id)
+                emit(
+                    "action_decided",
+                    tool=clarifying_call.name,
+                    call_id=clarifying_call.id,
+                    decision="clarify",
+                )
+                tool_results.append(
+                    ToolExecutionResult(
+                        call_id=clarifying_call.id,
+                        name=clarifying_call.name,
+                        ok=False,
+                        error="ambiguous_intent",
+                    )
+                )
+                clarification_requested = True
+                continue
             for call in reply.tool_calls:
                 if call.id in handled_call_ids:
                     emit(
@@ -268,17 +303,24 @@ class AgentCore:
                     continue
                 handled_call_ids.add(call.id)
                 outcome = await self._execute_tool(
-                    call, execution_context, messages, emit
+                    call,
+                    execution_context,
+                    messages,
+                    tuple(tool_results),
+                    tuple(loaded_skills.values()),
+                    emit,
                 )
                 if outcome == "clarify":
-                    emit("turn_completed", stop_reason="clarification")
-                    return TurnResult(
-                        chat_content=ChatContent(
-                            role="assistant", content=reply.content.strip()
-                        ),
-                        stop_reason="clarification",
-                        events=tuple(events),
+                    tool_results.append(
+                        ToolExecutionResult(
+                            call_id=call.id,
+                            name=call.name,
+                            ok=False,
+                            error="ambiguous_intent",
+                        )
                     )
+                    clarification_requested = True
+                    break
                 if isinstance(outcome, PendingConfirmation):
                     emit(
                         "confirmation_pending",
@@ -297,10 +339,10 @@ class AgentCore:
                 tool_results.append(outcome)
 
         chat_content = ChatContent(role="assistant", content=reply.content.strip())
-        emit("turn_completed", stop_reason="final")
+        emit("turn_completed", stop_reason=final_stop_reason)
         return TurnResult(
             chat_content=chat_content,
-            stop_reason="final",
+            stop_reason=final_stop_reason,
             events=tuple(events),
         )
 
@@ -319,7 +361,7 @@ class AgentCore:
             conversation_id=conversation_id,
             details=details,
         )
-        self._audit_events.append(deepcopy(event))
+        self._audit.append(event)
         return event
 
     @staticmethod
@@ -343,6 +385,8 @@ class AgentCore:
         call: ToolCall,
         context: ExecutionContext,
         initiating_context: tuple[ChatContent, ...],
+        prior_tool_results: tuple[ToolExecutionResult, ...],
+        loaded_skills: tuple[LoadedSkill, ...],
         emit: Callable[..., None],
     ) -> ToolExecutionResult | PendingConfirmation | Literal["clarify"]:
         tool = self._tools.get(call.name)
@@ -360,13 +404,7 @@ class AgentCore:
                 error=result.error,
             )
             return result
-        call_context = ExecutionContext(
-            user_id=context.user_id,
-            conversation_id=context.conversation_id,
-            granted_permissions=context.granted_permissions,
-            intent_clarity=call.intent_clarity,
-        )
-        decision = self._permission_engine.decide(tool.metadata(), call_context)
+        decision = self._permission_decision(tool, call, context)
         emit("action_decided", tool=call.name, call_id=call.id, decision=decision)
         if decision == "clarify":
             return "clarify"
@@ -384,23 +422,14 @@ class AgentCore:
                 error=result.error,
             )
             return result
-        try:
-            arguments = validate_tool_arguments(tool.input_schema, call.arguments)
-        except ToolArgumentsError as error:
-            result = ToolExecutionResult(
-                call_id=call.id,
-                name=call.name,
-                ok=False,
-                error="invalid_arguments",
-                detail=str(error),
-            )
-            emit(
-                "tool_execution_failed",
-                tool=call.name,
-                call_id=call.id,
-                error=result.error,
-            )
-            return result
+        arguments = self._validate_tool_call(
+            tool=tool,
+            call_id=call.id,
+            arguments=call.arguments,
+            emit=emit,
+        )
+        if isinstance(arguments, ToolExecutionResult):
+            return arguments
         if decision == "confirm":
             return self._confirmations.create(
                 binding=ConfirmationBinding(
@@ -412,42 +441,30 @@ class AgentCore:
                 ),
                 call_id=call.id,
                 granted_permissions=context.granted_permissions,
+                prior_tool_results=prior_tool_results,
+                loaded_skills=loaded_skills,
                 now=self._clock(),
             )
-        emit("tool_execution_started", tool=call.name, call_id=call.id)
-        try:
-            value = await tool.executor(arguments, context.conversation_id)
-        except Exception as error:  # noqa: BLE001 - extension failures are normalized
-            result = ToolExecutionResult(
-                call_id=call.id,
-                name=call.name,
-                ok=False,
-                error="executor_error",
-                detail=str(error),
-            )
-            emit(
-                "tool_execution_failed",
-                tool=call.name,
-                call_id=call.id,
-                error=result.error,
-            )
-            return result
-        result_value, undo = self._normalize_tool_outcome(value)
-        result = ToolExecutionResult(
+        return await self._invoke_validated_tool(
+            tool=tool,
             call_id=call.id,
-            name=call.name,
-            ok=True,
-            result=result_value,
-            undo=undo,
+            arguments=arguments,
+            conversation_id=context.conversation_id,
+            emit=emit,
         )
-        completion_details: dict[str, object] = {
-            "tool": call.name,
-            "call_id": call.id,
-        }
-        if undo is not None:
-            completion_details["undo"] = asdict(undo)
-        emit("tool_execution_completed", **completion_details)
-        return result
+
+    def _permission_decision(
+        self, tool: Tool, call: ToolCall, context: ExecutionContext
+    ) -> PermissionDecision:
+        return self._permission_engine.decide(
+            tool.metadata(),
+            ExecutionContext(
+                user_id=context.user_id,
+                conversation_id=context.conversation_id,
+                granted_permissions=context.granted_permissions,
+                intent_clarity=call.intent_clarity,
+            ),
+        )
 
     async def _execute_confirmed_tool(
         self,
@@ -490,55 +507,86 @@ class AgentCore:
                 error=result.error,
             )
             return result
-        emit(
-            "tool_execution_started",
-            tool=binding.tool,
+        arguments = self._validate_tool_call(
+            tool=tool,
             call_id=resolution.call_id,
+            arguments=binding.arguments,
+            emit=emit,
         )
+        if isinstance(arguments, ToolExecutionResult):
+            return arguments
+        return await self._invoke_validated_tool(
+            tool=tool,
+            call_id=resolution.call_id,
+            arguments=arguments,
+            conversation_id=binding.conversation_id,
+            emit=emit,
+        )
+
+    @staticmethod
+    def _validate_tool_call(
+        *,
+        tool: Tool,
+        call_id: str,
+        arguments: Mapping[str, object] | None,
+        emit: Callable[..., None],
+    ) -> dict[str, object] | ToolExecutionResult:
         try:
-            arguments = validate_tool_arguments(tool.input_schema, binding.arguments)
-            value = await tool.executor(arguments, binding.conversation_id)
+            return validate_tool_arguments(tool.input_schema, arguments)
         except ToolArgumentsError as error:
             result = ToolExecutionResult(
-                call_id=resolution.call_id,
-                name=binding.tool,
+                call_id=call_id,
+                name=tool.name,
                 ok=False,
                 error="invalid_arguments",
                 detail=str(error),
             )
             emit(
                 "tool_execution_failed",
-                tool=binding.tool,
-                call_id=resolution.call_id,
+                tool=tool.name,
+                call_id=call_id,
                 error=result.error,
             )
             return result
+
+    async def _invoke_validated_tool(
+        self,
+        *,
+        tool: Tool,
+        call_id: str,
+        arguments: dict[str, object],
+        conversation_id: str,
+        emit: Callable[..., None],
+    ) -> ToolExecutionResult:
+        emit("tool_execution_started", tool=tool.name, call_id=call_id)
+        try:
+            value = await tool.executor(arguments, conversation_id)
         except Exception as error:  # noqa: BLE001 - extension failures are normalized
             result = ToolExecutionResult(
-                call_id=resolution.call_id,
-                name=binding.tool,
+                call_id=call_id,
+                name=tool.name,
                 ok=False,
                 error="executor_error",
                 detail=str(error),
             )
             emit(
                 "tool_execution_failed",
-                tool=binding.tool,
-                call_id=resolution.call_id,
+                tool=tool.name,
+                call_id=call_id,
                 error=result.error,
             )
             return result
         result_value, undo = self._normalize_tool_outcome(value)
         result = ToolExecutionResult(
-            call_id=resolution.call_id,
-            name=binding.tool,
+            call_id=call_id,
+            name=tool.name,
             ok=True,
             result=result_value,
             undo=undo,
         )
         completion_details: dict[str, object] = {
-            "tool": binding.tool,
-            "call_id": resolution.call_id,
+            "tool": tool.name,
+            "call_id": call_id,
         }
         if undo is not None:
             completion_details["undo"] = asdict(undo)

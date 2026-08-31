@@ -3,7 +3,7 @@
 from dataclasses import asdict
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Literal
+from typing import Literal, assert_never
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -16,6 +16,7 @@ from mellowday.agent_core import (
     ConfirmationBinding,
     ConfirmationDecision,
     ConfirmationError,
+    ConfirmationErrorCode,
     FakeProvider,
     ModelProvider,
     Skill,
@@ -26,6 +27,7 @@ from mellowday.agent_core import (
 
 _STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
 _DEFAULT_SKILL_STATE_PATH = Path(".mellowday") / "skill-enablement.json"
+_DEFAULT_AUDIT_PATH = Path(".mellowday") / "audit-events.jsonl"
 
 
 class ChatRequestBody(BaseModel):
@@ -55,12 +57,24 @@ class ConfirmationDecisionBody(BaseModel):
     binding: ConfirmationBindingBody
 
 
+def _confirmation_status_code(code: ConfirmationErrorCode) -> int:
+    match code:
+        case "not_found":
+            return 404
+        case "expired":
+            return 410
+        case "binding_mismatch" | "already_decided":
+            return 409
+    assert_never(code)
+
+
 def create_app(
     *,
     provider: ModelProvider | None = None,
     tools: Iterable[Tool] = (),
     skills: Iterable[Skill] = (),
     skill_state_path: str | Path | None = _DEFAULT_SKILL_STATE_PATH,
+    audit_path: str | Path | None = _DEFAULT_AUDIT_PATH,
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
@@ -70,6 +84,7 @@ def create_app(
         tools=tools,
         skills=skills,
         skill_state_path=skill_state_path,
+        audit_path=audit_path,
     )
     app = FastAPI(title="Mellowday", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=_STATIC_DIRECTORY), name="static")
@@ -131,14 +146,8 @@ def create_app(
                 )
             )
         except ConfirmationError as error:
-            status_code = {
-                "not_found": 404,
-                "expired": 410,
-                "binding_mismatch": 409,
-                "already_decided": 409,
-            }.get(error.code, 409)
             raise HTTPException(
-                status_code=status_code,
+                status_code=_confirmation_status_code(error.code),
                 detail="Confirmation is unavailable for this decision",
             ) from error
         return {"turn": asdict(turn)}

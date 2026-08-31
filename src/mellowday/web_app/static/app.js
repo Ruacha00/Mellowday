@@ -320,9 +320,9 @@ async function loadConfirmations() {
 function renderAuditHistory(events) {
   auditList.replaceChildren();
   auditCount.textContent = String(events.length);
-  const recent = events.slice(-10).reverse();
+  const ordered = [...events].reverse();
 
-  if (recent.length === 0) {
+  if (ordered.length === 0) {
     const item = document.createElement("li");
     item.className = "empty-capability";
     item.textContent = "No runtime events have been recorded.";
@@ -330,7 +330,7 @@ function renderAuditHistory(events) {
     return;
   }
 
-  for (const event of recent) {
+  for (const event of ordered) {
     const item = document.createElement("li");
     item.className = "audit-event";
     const type = document.createElement("code");
@@ -344,6 +344,16 @@ function renderAuditHistory(events) {
       { hour: "2-digit", minute: "2-digit", second: "2-digit" },
     );
     item.append(type, detail, occurred);
+    if (event.details.undo) {
+      const undo = document.createElement("details");
+      undo.className = "audit-undo";
+      const summary = document.createElement("summary");
+      summary.textContent = "Undo available";
+      const metadata = document.createElement("pre");
+      metadata.textContent = JSON.stringify(event.details.undo, null, 2);
+      undo.append(summary, metadata);
+      item.append(undo);
+    }
     auditList.append(item);
   }
 }

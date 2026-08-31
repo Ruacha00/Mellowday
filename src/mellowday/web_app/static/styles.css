@@ -508,6 +508,29 @@ button:disabled {
   grid-row: 1 / span 2;
 }
 
+.audit-undo {
+  grid-column: 1 / -1;
+  margin-top: 5px;
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+}
+
+.audit-undo summary {
+  color: var(--vermillion);
+  cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.audit-undo pre {
+  margin: 9px 0 0;
+  padding: 10px;
+  overflow-x: auto;
+  background: rgba(23, 56, 47, 0.06);
+  font-size: 0.68rem;
+}
+
 .capability-name {
   color: var(--ink);
   font: 700 0.82rem/1.3 "Cascadia Mono", "SFMono-Regular", Consolas, monospace;

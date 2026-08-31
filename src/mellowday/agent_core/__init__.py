@@ -12,6 +12,7 @@ from .confirmations import (
     ConfirmationDecision,
     ConfirmationDecisionValue,
     ConfirmationError,
+    ConfirmationErrorCode,
     PendingConfirmation,
 )
 from .extensions import (
@@ -39,6 +40,7 @@ __all__ = [
     "ConfirmationDecision",
     "ConfirmationDecisionValue",
     "ConfirmationError",
+    "ConfirmationErrorCode",
     "ExecutionContext",
     "EventType",
     "FakeProvider",

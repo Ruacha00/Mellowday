@@ -1,16 +1,20 @@
 import asyncio
 from collections.abc import Sequence
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
 from mellowday.agent_core import (
     AgentCore,
     ChatContent,
+    ConfirmationBinding,
     ConfirmationDecision,
     ConfirmationError,
+    FakeProvider,
     ProviderReply,
     ProviderRequest,
+    Skill,
     Tool,
     ToolCall,
     ToolOutcome,
@@ -108,7 +112,6 @@ def test_ambiguous_action_returns_natural_clarification_without_execution() -> N
     provider = ScriptedProvider(
         (
             ProviderReply(
-                content="Which note would you like me to update?",
                 tool_calls=(
                     ToolCall(
                         id="call-ambiguous",
@@ -118,6 +121,7 @@ def test_ambiguous_action_returns_natural_clarification_without_execution() -> N
                     ),
                 ),
             ),
+            ProviderReply(content="Which note would you like me to update?"),
         )
     )
     core = AgentCore(
@@ -150,9 +154,62 @@ def test_ambiguous_action_returns_natural_clarification_without_execution() -> N
     assert executions == []
     assert result.stop_reason == "clarification"
     assert result.chat_content.content == "Which note would you like me to update?"
+    assert provider.requests[1].tool_results[0].error == "ambiguous_intent"
     assert [event.type for event in result.events].count("action_decided") == 1
     assert "tool_execution_started" not in [event.type for event in result.events]
     assert core.list_pending_confirmations() == ()
+
+
+def test_ambiguous_action_prevents_partial_execution_of_same_tool_batch() -> None:
+    executions: list[str] = []
+
+    async def execute(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        executions.append(str(arguments["value"]))
+        return {"conversation_id": conversation_id}
+
+    provider = ScriptedProvider(
+        (
+            ProviderReply(
+                tool_calls=(
+                    ToolCall("call-clear", "change_note", {"value": "first"}),
+                    ToolCall(
+                        "call-ambiguous",
+                        "change_note",
+                        {"value": "second"},
+                        intent_clarity="ambiguous",
+                    ),
+                )
+            ),
+            ProviderReply(content="Which change did you want me to make?"),
+        )
+    )
+    core = AgentCore(
+        provider=provider,
+        tools=(
+            Tool(
+                name="change_note",
+                description="Change one note.",
+                input_schema={"type": "object", "properties": {}},
+                executor=execute,
+                side_effect="reversible",
+            ),
+        ),
+    )
+
+    result = asyncio.run(
+        core.run_turn(
+            TurnRequest(
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Change those."),),
+            )
+        )
+    )
+
+    assert executions == []
+    assert result.stop_reason == "clarification"
+    assert result.chat_content.content == "Which change did you want me to make?"
 
 
 def test_high_risk_action_creates_bound_pending_confirmation() -> None:
@@ -366,6 +423,94 @@ def test_accepting_confirmation_executes_once_and_reports_outcome_naturally() ->
     assert executions == [{"note_id": "note-1"}]
 
 
+def test_confirmation_resume_preserves_prior_tool_and_skill_context() -> None:
+    async def inspect_note(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        return {"found": arguments["note_id"], "conversation_id": conversation_id}
+
+    async def erase_note(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        return {"erased": arguments["note_id"], "conversation_id": conversation_id}
+
+    provider = ScriptedProvider(
+        (
+            ProviderReply(
+                tool_calls=(
+                    ToolCall("call-inspect", "inspect_note", {"note_id": "note-1"}),
+                ),
+                selected_skills=("careful_actions",),
+            ),
+            ProviderReply(
+                content="This permanently erases the note. Continue?",
+                tool_calls=(
+                    ToolCall("call-delete", "erase_note", {"note_id": "note-1"}),
+                ),
+            ),
+            ProviderReply(content="The note is gone."),
+        )
+    )
+    core = AgentCore(
+        provider=provider,
+        tools=(
+            Tool(
+                name="inspect_note",
+                description="Inspect one note.",
+                input_schema={"type": "object", "properties": {}},
+                executor=inspect_note,
+            ),
+            Tool(
+                name="erase_note",
+                description="Permanently erase one note.",
+                input_schema={"type": "object", "properties": {}},
+                executor=erase_note,
+                side_effect="irreversible",
+            ),
+        ),
+        skills=(
+            Skill(
+                name="careful_actions",
+                description="Keep consequential action explanations clear.",
+                instruction_loader=lambda: "Explain consequential actions carefully.",
+            ),
+        ),
+    )
+    pending_turn = asyncio.run(
+        core.run_turn(
+            TurnRequest(
+                user_id="user-1",
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Erase note one."),),
+            )
+        )
+    )
+    pending = pending_turn.confirmation
+    assert pending is not None
+
+    asyncio.run(
+        core.decide_confirmation(
+            ConfirmationDecision(
+                confirmation_id=pending.id,
+                binding=pending.binding,
+                decision="accept",
+            )
+        )
+    )
+
+    resumed_request = provider.requests[2]
+    assert [result.name for result in resumed_request.tool_results] == [
+        "inspect_note",
+        "erase_note",
+    ]
+    assert [skill.name for skill in resumed_request.loaded_skills] == [
+        "careful_actions"
+    ]
+    assert resumed_request.messages == (
+        ChatContent(role="user", content="Erase note one."),
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "mismatched_value"),
     (
@@ -564,6 +709,23 @@ def test_public_pending_confirmation_cannot_mutate_stored_binding() -> None:
     assert executions == []
 
 
+def test_invalid_confirmation_decision_cannot_consume_pending_action() -> None:
+    binding = ConfirmationBinding(
+        user_id="user-1",
+        conversation_id="conversation-1",
+        tool="erase_note",
+        arguments={"note_id": "note-1"},
+        initiating_context=(ChatContent(role="user", content="Erase note one."),),
+    )
+
+    with pytest.raises(ValueError, match="confirmation decision"):
+        ConfirmationDecision(
+            confirmation_id="confirmation-1",
+            binding=binding,
+            decision="later",  # type: ignore[arg-type]
+        )
+
+
 def test_rejecting_confirmation_never_executes_and_reports_naturally() -> None:
     executions: list[dict[str, object]] = []
 
@@ -698,3 +860,33 @@ def test_audit_history_exposes_available_undo_metadata() -> None:
         "tool": "delete_note",
         "arguments": {"note_id": "note-1"},
     }
+
+
+def test_audit_history_persists_locally_across_agent_core_restart(
+    tmp_path: Path,
+) -> None:
+    audit_path = tmp_path / "audit-events.jsonl"
+    first = AgentCore(provider=FakeProvider(), audit_path=audit_path)
+    asyncio.run(
+        first.run_turn(
+            TurnRequest(
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Hello."),),
+            )
+        )
+    )
+    first_history = first.list_audit_events()
+
+    restarted = AgentCore(provider=FakeProvider(), audit_path=audit_path)
+    assert restarted.list_audit_events() == first_history
+    result = asyncio.run(
+        restarted.run_turn(
+            TurnRequest(
+                conversation_id="conversation-2",
+                messages=(ChatContent(role="user", content="Hello again."),),
+            )
+        )
+    )
+
+    assert result.events[0].sequence == first_history[-1].sequence + 1
+    assert restarted.list_audit_events() == first_history + result.events

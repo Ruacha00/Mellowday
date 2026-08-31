@@ -6,15 +6,19 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import Literal
 
+from .extensions import LoadedSkill, ToolExecutionResult
 from .types import ChatContent
 
 
 ConfirmationStatus = Literal["pending", "accepted", "rejected", "expired"]
 ConfirmationDecisionValue = Literal["accept", "reject"]
+ConfirmationErrorCode = Literal[
+    "not_found", "already_decided", "binding_mismatch", "expired"
+]
 
 
 class ConfirmationError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: ConfirmationErrorCode) -> None:
         super().__init__(code)
         self.code = code
 
@@ -42,12 +46,18 @@ class ConfirmationDecision:
     binding: ConfirmationBinding
     decision: ConfirmationDecisionValue
 
+    def __post_init__(self) -> None:
+        if self.decision not in {"accept", "reject"}:
+            raise ValueError(f"invalid confirmation decision: {self.decision!r}")
+
 
 @dataclass(frozen=True, slots=True)
 class ConfirmationResolution:
     pending: PendingConfirmation
     call_id: str
     granted_permissions: tuple[str, ...]
+    prior_tool_results: tuple[ToolExecutionResult, ...]
+    loaded_skills: tuple[LoadedSkill, ...]
     decision: ConfirmationDecisionValue
 
 
@@ -56,6 +66,8 @@ class _StoredConfirmation:
     pending: PendingConfirmation
     call_id: str
     granted_permissions: tuple[str, ...]
+    prior_tool_results: tuple[ToolExecutionResult, ...]
+    loaded_skills: tuple[LoadedSkill, ...]
     status: ConfirmationStatus = "pending"
 
 
@@ -73,15 +85,11 @@ class ConfirmationStore:
         binding: ConfirmationBinding,
         call_id: str,
         granted_permissions: tuple[str, ...],
+        prior_tool_results: tuple[ToolExecutionResult, ...],
+        loaded_skills: tuple[LoadedSkill, ...],
         now: float,
     ) -> PendingConfirmation:
-        safe_binding = ConfirmationBinding(
-            user_id=binding.user_id,
-            conversation_id=binding.conversation_id,
-            tool=binding.tool,
-            arguments=deepcopy(binding.arguments),
-            initiating_context=binding.initiating_context,
-        )
+        safe_binding = self._copy_binding(binding)
         pending = PendingConfirmation(
             id=secrets.token_urlsafe(24),
             binding=safe_binding,
@@ -93,6 +101,8 @@ class ConfirmationStore:
                 pending=pending,
                 call_id=call_id,
                 granted_permissions=granted_permissions,
+                prior_tool_results=deepcopy(prior_tool_results),
+                loaded_skills=loaded_skills,
             )
         return self._copy_pending(pending)
 
@@ -126,6 +136,8 @@ class ConfirmationStore:
                 pending=self._copy_pending(record.pending),
                 call_id=record.call_id,
                 granted_permissions=record.granted_permissions,
+                prior_tool_results=deepcopy(record.prior_tool_results),
+                loaded_skills=record.loaded_skills,
                 decision=decision.decision,
             )
 
@@ -133,15 +145,19 @@ class ConfirmationStore:
     def _copy_pending(pending: PendingConfirmation) -> PendingConfirmation:
         return PendingConfirmation(
             id=pending.id,
-            binding=ConfirmationBinding(
-                user_id=pending.binding.user_id,
-                conversation_id=pending.binding.conversation_id,
-                tool=pending.binding.tool,
-                arguments=deepcopy(pending.binding.arguments),
-                initiating_context=pending.binding.initiating_context,
-            ),
+            binding=ConfirmationStore._copy_binding(pending.binding),
             created_at=pending.created_at,
             expires_at=pending.expires_at,
+        )
+
+    @staticmethod
+    def _copy_binding(binding: ConfirmationBinding) -> ConfirmationBinding:
+        return ConfirmationBinding(
+            user_id=binding.user_id,
+            conversation_id=binding.conversation_id,
+            tool=binding.tool,
+            arguments=deepcopy(binding.arguments),
+            initiating_context=binding.initiating_context,
         )
 
 
@@ -150,5 +166,6 @@ __all__ = [
     "ConfirmationDecision",
     "ConfirmationDecisionValue",
     "ConfirmationError",
+    "ConfirmationErrorCode",
     "PendingConfirmation",
 ]

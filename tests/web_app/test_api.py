@@ -16,7 +16,7 @@ from mellowday.web_app import create_app
 
 def test_web_app_health_and_chat_use_the_public_agent_core_facade() -> None:
     async def exercise_boundary() -> None:
-        app = create_app(provider=FakeProvider())
+        app = create_app(provider=FakeProvider(), audit_path=None)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             health = await client.get("/healthz")
@@ -79,6 +79,7 @@ def test_settings_lists_neutral_capability_metadata_without_loading_skills() -> 
             provider=FakeProvider(),
             tools=(tool,),
             skills=(skill,),
+            audit_path=None,
         )
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -122,6 +123,7 @@ def test_settings_persists_local_skill_enablement(tmp_path: Path) -> None:
             provider=FakeProvider(),
             skills=(skill,),
             skill_state_path=state_file,
+            audit_path=None,
         )
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -150,6 +152,7 @@ def test_settings_persists_local_skill_enablement(tmp_path: Path) -> None:
             provider=FakeProvider(),
             skills=(skill,),
             skill_state_path=state_file,
+            audit_path=None,
         )
         restarted_transport = ASGITransport(app=restarted)
         async with AsyncClient(
@@ -211,6 +214,7 @@ def test_settings_inspects_and_accepts_pending_confirmation() -> None:
                     risk="high",
                 ),
             ),
+            audit_path=None,
         )
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
