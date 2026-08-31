@@ -3,11 +3,12 @@
 from dataclasses import asdict
 from typing import cast
 
-from mellowday.agent_core import Tool
+from mellowday.agent_core import Tool, ToolClarificationRequired
 
 from .calendar_events import (
     CalendarEvent,
     CalendarEventNotFoundError,
+    CalendarEventTimeClarificationRequired,
     CalendarEventUpdates,
     SQLiteCalendarEventService,
 )
@@ -17,13 +18,16 @@ def build_calendar_event_tools(
     service: SQLiteCalendarEventService,
 ) -> tuple[Tool, ...]:
     async def create(arguments: dict[str, object], conversation_id: str) -> object:
-        event = service.create(
-            title=cast(str, arguments["title"]),
-            start_at=cast(str, arguments["start_at"]),
-            end_at=cast(str | None, arguments.get("end_at")),
-            details=cast(str | None, arguments.get("details")),
-            conversation_id=conversation_id,
-        )
+        try:
+            event = service.create(
+                title=cast(str, arguments["title"]),
+                start_at=cast(str, arguments["start_at"]),
+                end_at=cast(str | None, arguments.get("end_at")),
+                details=cast(str | None, arguments.get("details")),
+                conversation_id=conversation_id,
+            )
+        except CalendarEventTimeClarificationRequired as error:
+            raise ToolClarificationRequired(str(error)) from error
         return _event_payload(service, event)
 
     async def get(arguments: dict[str, object], _conversation_id: str) -> object:
@@ -48,11 +52,14 @@ def build_calendar_event_tools(
         if "details" in arguments:
             updates["details"] = cast(str | None, arguments["details"])
         event_id = cast(str, arguments["event_id"])
-        event = service.update(
-            event_id,
-            **updates,
-            conversation_id=conversation_id,
-        )
+        try:
+            event = service.update(
+                event_id,
+                **updates,
+                conversation_id=conversation_id,
+            )
+        except CalendarEventTimeClarificationRequired as error:
+            raise ToolClarificationRequired(str(error)) from error
         return _event_payload(service, _require_event(event, event_id))
 
     async def delete(arguments: dict[str, object], conversation_id: str) -> object:

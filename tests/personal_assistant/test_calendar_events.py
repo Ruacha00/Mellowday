@@ -4,6 +4,7 @@ import pytest
 
 from mellowday.personal_assistant import (
     CalendarEventChange,
+    CalendarEventTimeClarificationRequired,
     CalendarEventValidationError,
     SQLiteCalendarEventService,
     SQLiteReminderService,
@@ -95,3 +96,28 @@ def test_calendar_event_time_range_is_validated_at_the_service_boundary(
             start_at="2026-09-04T18:00",
             end_at="2026-09-04T17:00",
         )
+
+
+def test_ambiguous_or_nonexistent_local_time_requires_clarification(
+    tmp_path: Path,
+) -> None:
+    service = SQLiteCalendarEventService(
+        tmp_path / "mellowday.sqlite3",
+        installation_timezone="America/New_York",
+    )
+
+    with pytest.raises(
+        CalendarEventTimeClarificationRequired, match="UTC offset"
+    ):
+        service.create(title="Night shift", start_at="2026-11-01T01:30")
+    with pytest.raises(
+        CalendarEventTimeClarificationRequired, match="does not exist"
+    ):
+        service.create(title="Early call", start_at="2026-03-08T02:30")
+
+    explicit = service.create(
+        title="Night shift",
+        start_at="2026-11-01T01:30:00-05:00",
+    )
+
+    assert explicit.start_at == "2026-11-01T01:30:00-05:00"

@@ -7,7 +7,7 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -26,6 +26,10 @@ class CalendarEvent:
 
 class CalendarEventValidationError(ValueError):
     """Raised when Calendar Event input is invalid."""
+
+
+class CalendarEventTimeClarificationRequired(CalendarEventValidationError):
+    """Raised when a local Calendar Event time needs User clarification."""
 
 
 class CalendarEventNotFoundError(LookupError):
@@ -261,10 +265,38 @@ class SQLiteCalendarEventService:
                 f"{field} must be an ISO 8601 date-time"
             ) from error
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=self._timezone)
+            parsed = self._resolve_local_time(field, parsed)
         else:
             parsed = parsed.astimezone(self._timezone)
         return parsed.isoformat(timespec="seconds"), parsed.timestamp()
+
+    def _resolve_local_time(self, field: str, parsed: datetime) -> datetime:
+        first = parsed.replace(tzinfo=self._timezone, fold=0)
+        second = parsed.replace(tzinfo=self._timezone, fold=1)
+
+        def round_trips(candidate: datetime) -> bool:
+            return (
+                candidate.astimezone(timezone.utc)
+                .astimezone(self._timezone)
+                .replace(tzinfo=None)
+                == parsed
+            )
+
+        first_valid = round_trips(first)
+        second_valid = round_trips(second)
+        if not first_valid and not second_valid:
+            raise CalendarEventTimeClarificationRequired(
+                f"{field} does not exist in {self._timezone}; choose another time"
+            )
+        if (
+            first_valid
+            and second_valid
+            and first.utcoffset() != second.utcoffset()
+        ):
+            raise CalendarEventTimeClarificationRequired(
+                f"{field} is ambiguous in {self._timezone}; include a UTC offset"
+            )
+        return first if first_valid else second
 
     def _optional_date_time(
         self, field: str, value: str | None
@@ -376,6 +408,7 @@ __all__ = [
     "CalendarEventChange",
     "CalendarEventNotFoundError",
     "CalendarEventOperation",
+    "CalendarEventTimeClarificationRequired",
     "CalendarEventUpdates",
     "CalendarEventValidationError",
     "SQLiteCalendarEventService",

@@ -275,3 +275,60 @@ def test_chat_runs_calendar_event_lifecycle_and_clarifies_ambiguous_time(
         "calendar_event_update",
         "calendar_event_delete",
     ]
+
+
+def test_chat_naturally_clarifies_an_ambiguous_installation_time(
+    tmp_path: Path,
+) -> None:
+    class AmbiguousTimeProvider:
+        name = "ambiguous-calendar-time"
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            if request.tool_results:
+                result = request.tool_results[-1]
+                assert result.error == "ambiguous_intent"
+                assert "UTC offset" in (result.detail or "")
+                return ProviderReply(
+                    content=(
+                        "That time occurs twice. Which UTC offset should I use?"
+                    )
+                )
+            return ProviderReply(
+                tool_calls=(
+                    ToolCall(
+                        "ambiguous-dst-time",
+                        "calendar_event_create",
+                        {
+                            "title": "Night shift",
+                            "start_at": "2026-11-01T01:30",
+                        },
+                    ),
+                )
+            )
+
+    async def exercise() -> None:
+        app = create_app(
+            provider=AmbiguousTimeProvider(),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            installation_timezone="America/New_York",
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/chat",
+                json={
+                    "conversation_id": "main",
+                    "content": "Put the night shift at 1:30 on November 1.",
+                },
+            )
+            events = await client.get("/api/settings/calendar-events")
+
+        assert response.json()["stop_reason"] == "clarification"
+        assert response.json()["chat_content"]["content"] == (
+            "That time occurs twice. Which UTC offset should I use?"
+        )
+        assert events.json()["calendar_events"] == []
+
+    asyncio.run(exercise())
