@@ -171,6 +171,42 @@
           </form>
         </section>
 
+        <section class="task-settings" aria-labelledby="task-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Life Records</p>
+              <h3 id="task-settings-title">Tasks</h3>
+              <p class="capability-description">
+                Track work and completion here. Deadlines do not create Reminders.
+              </p>
+            </div>
+            <span class="local-badge">Local Tasks</span>
+          </header>
+
+          <form id="task-form" class="task-form">
+            <input name="task_id" type="hidden" />
+            <label>
+              <span>Task title</span>
+              <input name="title" autocomplete="off" required aria-label="Task title" />
+            </label>
+            <label>
+              <span>Task details</span>
+              <textarea name="details" rows="2" aria-label="Task details"></textarea>
+            </label>
+            <label>
+              <span>Task deadline</span>
+              <input name="deadline" type="date" aria-label="Task deadline" />
+            </label>
+            <div class="task-form-actions">
+              <button type="submit">Add Task</button>
+              <button id="cancel-task-edit" class="text-button" type="button" hidden>
+                Cancel edit
+              </button>
+            </div>
+          </form>
+          <div id="task-list" class="task-list" aria-live="polite"></div>
+        </section>
+
         <section class="provider-settings" aria-labelledby="provider-settings-title">
           <header class="history-settings-heading">
             <div>

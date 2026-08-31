@@ -34,7 +34,15 @@ from mellowday.agent_core.openai_compatible import (
     HttpxProviderTransport,
     ProviderTransport,
 )
-from mellowday.personal_assistant import Persona, SQLitePersonaStore
+from mellowday.personal_assistant import (
+    Persona,
+    SQLitePersonaStore,
+    SQLiteTaskService,
+    TaskChange,
+    TaskUpdates,
+    TaskValidationError,
+    build_task_tools,
+)
 
 from .provider_settings import (
     SelectedProvider,
@@ -99,8 +107,24 @@ class ConversationResetDecisionBody(ConfirmationDecisionBody):
     confirmation_id: str
 
 
+class ApplicationConfirmationDecisionBody(ConfirmationDecisionBody):
+    confirmation_id: str
+
+
 class DiagnosticProbeBody(BaseModel):
     content: str = Field(min_length=1, max_length=4_000)
+
+
+class TaskCreateBody(BaseModel):
+    title: str = Field(min_length=1)
+    details: str | None = None
+    deadline: str | None = None
+
+
+class TaskUpdateBody(BaseModel):
+    title: str | None = Field(default=None, min_length=1)
+    details: str | None = None
+    deadline: str | None = None
 
 
 def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
@@ -141,7 +165,6 @@ def create_app(
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
-    registered_tools = tuple(tools)
     registered_skills = tuple(skills)
     database_path = (
         Path(conversation_database_path)
@@ -155,6 +178,20 @@ def create_app(
     )
     persona_store = SQLitePersonaStore(database_path)
     provider_store = SQLiteProviderConfigurationStore(database_path)
+    agent_core_reference: list[AgentCore] = []
+
+    def record_task_change(change: TaskChange) -> None:
+        agent_core_reference[0].record_application_action(
+            action=change.operation,
+            resource_type="task",
+            resource_id=change.task_id,
+            conversation_id=change.conversation_id,
+        )
+
+    task_service = SQLiteTaskService(
+        database_path, change_listener=record_task_change
+    )
+    registered_tools = (*build_task_tools(task_service), *tuple(tools))
     provider_health: dict[str, dict[str, object]] = {}
     configured_provider_transport = provider_transport or HttpxProviderTransport()
     if provider is None:
@@ -179,6 +216,7 @@ def create_app(
         ),
         runtime_events=runtime_events,
     )
+    agent_core_reference.append(agent_core)
     diagnostic_core = AgentCore(
         provider=selected_provider,
         tools=(),
@@ -205,6 +243,17 @@ def create_app(
                     "code": "conversation_history_unavailable",
                     "operation": error.operation,
                 }
+            },
+        )
+
+    @app.exception_handler(TaskValidationError)
+    async def task_validation_failure(
+        _request: Request, error: TaskValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {"code": "invalid_task", "message": str(error)}
             },
         )
 
@@ -461,6 +510,7 @@ def create_app(
         adapter = build_openai_compatible_provider(
             configuration, configured_provider_transport
         )
+
         try:
             await adapter.validate()
         except ProviderFailure as error:
@@ -500,6 +550,102 @@ def create_app(
     async def update_persona(body: PersonaBody) -> dict[str, object]:
         persona = persona_store.update(Persona(**body.model_dump()))
         return {"persona": asdict(persona)}
+
+    @app.get("/api/settings/tasks")
+    async def list_tasks() -> dict[str, object]:
+        return {"tasks": [asdict(task) for task in task_service.list()]}
+
+    @app.post("/api/settings/tasks", status_code=201)
+    async def create_task(body: TaskCreateBody) -> dict[str, object]:
+        task = task_service.create(**body.model_dump())
+        return {"task": asdict(task)}
+
+    @app.get("/api/settings/tasks/{task_id}")
+    async def get_task(task_id: str) -> dict[str, object]:
+        task = task_service.get(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"task": asdict(task)}
+
+    @app.patch("/api/settings/tasks/{task_id}")
+    async def update_task(
+        task_id: str, body: TaskUpdateBody
+    ) -> dict[str, object]:
+        updates = cast(TaskUpdates, body.model_dump(exclude_unset=True))
+        if "title" in updates and updates["title"] is None:
+            raise TaskValidationError("title must not be null")
+        task = task_service.update(
+            task_id,
+            **updates,
+        )
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"task": asdict(task)}
+
+    @app.post("/api/settings/tasks/{task_id}/complete")
+    async def complete_task(task_id: str) -> dict[str, object]:
+        task = task_service.complete(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"task": asdict(task)}
+
+    @app.post("/api/settings/tasks/{task_id}/reopen")
+    async def reopen_task(task_id: str) -> dict[str, object]:
+        task = task_service.reopen(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"task": asdict(task)}
+
+    @app.post("/api/settings/tasks/{task_id}/delete-confirmation")
+    async def request_task_delete_confirmation(
+        task_id: str,
+    ) -> dict[str, object]:
+        if task_service.get(task_id) is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        confirmation, event = agent_core.request_application_confirmation(
+            user_id="local-user",
+            conversation_id="settings",
+            action="task_delete",
+            arguments={"task_id": task_id},
+        )
+        return {"confirmation": asdict(confirmation), "event": asdict(event)}
+
+    @app.delete("/api/settings/tasks/{task_id}")
+    async def delete_task(
+        task_id: str, body: ApplicationConfirmationDecisionBody
+    ) -> dict[str, object]:
+        if (
+            body.binding.tool != "task_delete"
+            or body.binding.arguments != {"task_id": task_id}
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Confirmation is bound to a different Task action",
+            )
+        try:
+            decision, event = agent_core.decide_application_confirmation(
+                ConfirmationDecision(
+                    confirmation_id=body.confirmation_id,
+                    binding=_confirmation_binding(body.binding),
+                    decision=body.decision,
+                )
+            )
+        except ConfirmationError as error:
+            raise HTTPException(
+                status_code=_confirmation_status_code(error.code),
+                detail="Confirmation is unavailable for this decision",
+            ) from error
+        if decision == "reject":
+            return {"ok": False, "decision": decision, "event": asdict(event)}
+        task = task_service.delete(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {
+            "ok": True,
+            "decision": decision,
+            "deleted_task": asdict(task),
+            "event": asdict(event),
+        }
 
     @app.post("/api/conversations/{conversation_id}/reset-confirmation")
     async def request_reset_confirmation(

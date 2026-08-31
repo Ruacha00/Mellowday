@@ -45,6 +45,9 @@ const diagnosticForm = document.querySelector("#diagnostic-form");
 const diagnosticMessage = document.querySelector("#diagnostic-message");
 const diagnosticResult = document.querySelector("#diagnostic-result");
 const recentConfirmationList = document.querySelector("#recent-confirmation-list");
+const taskForm = document.querySelector("#task-form");
+const taskList = document.querySelector("#task-list");
+const cancelTaskEdit = document.querySelector("#cancel-task-edit");
 
 const activeConversationId = "main";
 let selectedConversationId = null;
@@ -480,6 +483,150 @@ async function loadPersona() {
     personaForm.elements.namedItem(name).value = value;
   }
 }
+
+function resetTaskForm() {
+  taskForm.reset();
+  taskForm.elements.namedItem("task_id").value = "";
+  taskForm.querySelector('button[type="submit"]').textContent = "Add Task";
+  cancelTaskEdit.hidden = true;
+}
+
+function editTask(task) {
+  taskForm.elements.namedItem("task_id").value = task.id;
+  taskForm.elements.namedItem("title").value = task.title;
+  taskForm.elements.namedItem("details").value = task.details || "";
+  taskForm.elements.namedItem("deadline").value = task.deadline || "";
+  taskForm.querySelector('button[type="submit"]').textContent = "Save Task";
+  cancelTaskEdit.hidden = false;
+  taskForm.elements.namedItem("title").focus();
+}
+
+function taskAction(label, task, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = label;
+  button.setAttribute("aria-label", `${label} ${task.title}`);
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function renderTasks(tasks) {
+  taskList.replaceChildren();
+  if (tasks.length === 0) {
+    taskList.append(makeEmptyState("No Tasks yet."));
+    return;
+  }
+  for (const task of tasks) {
+    const card = document.createElement("article");
+    card.className = "capability-card task-card";
+    const heading = document.createElement("div");
+    heading.className = "task-card-heading";
+    const title = document.createElement("strong");
+    title.textContent = task.title;
+    const state = document.createElement("span");
+    state.className = "skill-state";
+    state.textContent = task.completed ? "Completed" : "Open";
+    heading.append(title, state);
+    const details = document.createElement("p");
+    details.className = "capability-description";
+    details.textContent = task.details || "No details";
+    const deadline = document.createElement("p");
+    deadline.className = "task-deadline";
+    deadline.textContent = task.deadline ? `Deadline ${task.deadline}` : "No deadline";
+    const actions = document.createElement("div");
+    actions.className = "task-actions";
+    actions.append(
+      taskAction(task.completed ? "Reopen" : "Complete", task, async () => {
+        const operation = task.completed ? "reopen" : "complete";
+        const response = await fetch(
+          `/api/settings/tasks/${encodeURIComponent(task.id)}/${operation}`,
+          { method: "POST" },
+        );
+        if (!response.ok) {
+          settingsStatus.textContent = "Task state could not be updated.";
+          return;
+        }
+        settingsStatus.textContent = task.completed ? "Task reopened." : "Task completed.";
+        await loadTasks();
+      }),
+      taskAction("Edit", task, () => editTask(task)),
+      taskAction("Delete", task, async () => {
+        if (!window.confirm(`Permanently delete ${task.title}?`)) return;
+        const path = `/api/settings/tasks/${encodeURIComponent(task.id)}`;
+        const requested = await fetch(`${path}/delete-confirmation`, {
+          method: "POST",
+        });
+        if (!requested.ok) {
+          settingsStatus.textContent = "Task could not be deleted.";
+          return;
+        }
+        const { confirmation } = await requested.json();
+        const response = await fetch(path, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmation_id: confirmation.id,
+            binding: confirmation.binding,
+            decision: "accept",
+          }),
+        });
+        if (!response.ok) {
+          settingsStatus.textContent = "Task delete confirmation is unavailable.";
+          return;
+        }
+        settingsStatus.textContent = "Task deleted.";
+        resetTaskForm();
+        await loadTasks();
+      }),
+    );
+    card.append(heading, details, deadline, actions);
+    taskList.append(card);
+  }
+}
+
+async function loadTasks() {
+  const response = await fetch("/api/settings/tasks");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderTasks(payload.tasks);
+}
+
+taskForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const taskId = taskForm.elements.namedItem("task_id").value;
+  const button = taskForm.querySelector('button[type="submit"]');
+  const values = Object.fromEntries(new FormData(taskForm).entries());
+  const body = {
+    title: values.title,
+    details: values.details || null,
+    deadline: values.deadline || null,
+  };
+  button.disabled = true;
+  try {
+    const response = await fetch(
+      taskId ? `/api/settings/tasks/${encodeURIComponent(taskId)}` : "/api/settings/tasks",
+      {
+        method: taskId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.detail?.message || `Request failed with ${response.status}`);
+    }
+    resetTaskForm();
+    settingsStatus.textContent = taskId ? "Task saved." : "Task added.";
+    await loadTasks();
+  } catch (error) {
+    settingsStatus.textContent = `Task could not be saved: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+cancelTaskEdit.addEventListener("click", resetTaskForm);
 
 function resetProviderForm() {
   providerForm.reset();
@@ -1031,6 +1178,7 @@ async function loadSettings() {
   try {
     await Promise.all([
       loadPersona(),
+      loadTasks(),
       loadProviders(),
       loadConversations(),
       loadCapabilities(),

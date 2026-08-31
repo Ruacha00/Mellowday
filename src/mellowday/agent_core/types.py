@@ -45,6 +45,7 @@ EventType = Literal[
     "conversation_history_read",
     "conversation_history_reset",
     "conversation_history_failed",
+    "application_action_completed",
 ]
 
 
