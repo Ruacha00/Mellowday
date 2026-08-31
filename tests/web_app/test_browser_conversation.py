@@ -137,6 +137,47 @@ def test_user_can_inspect_and_manage_capabilities_from_settings(
         browser.close()
 
 
+def test_user_can_view_and_edit_the_single_persona_from_settings(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        page.get_by_role("button", name="Settings").click()
+
+        values = {
+            "Name": "Luma",
+            "Identity": "an evening companion",
+            "Character": "warm and candid",
+            "Speaking style": "brief with gentle humor",
+            "Relationship framing": "a trusted companion",
+            "Conversational boundaries": "stay truthful",
+            "Proactive-chat style": "low-pressure check-ins",
+        }
+        for label, value in values.items():
+            field = page.get_by_label(label, exact=True)
+            expect(field).to_be_visible()
+            field.fill(value)
+
+        page.get_by_role("button", name="Save Persona").click()
+        expect(page.locator("#settings-panel").get_by_role("status")).to_contain_text(
+            "Persona saved."
+        )
+        page.get_by_role("button", name="Back to conversation").click()
+        page.get_by_role("button", name="Settings").click()
+
+        for label, value in values.items():
+            expect(page.get_by_label(label, exact=True)).to_have_value(value)
+        browser.close()
+
+
 def test_conversation_history_survives_a_real_backend_restart(
     tmp_path: Path,
 ) -> None:

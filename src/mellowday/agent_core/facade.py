@@ -57,6 +57,7 @@ class AgentCore:
         conversation_history: ConversationHistory | None = None,
         history_message_limit: int = 40,
         history_character_limit: int = 12_000,
+        system_instructions_provider: Callable[[], str] | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if max_provider_steps < 1:
@@ -76,6 +77,7 @@ class AgentCore:
         self._conversation_history = conversation_history
         self._history_message_limit = history_message_limit
         self._history_character_limit = history_character_limit
+        self._system_instructions_provider = system_instructions_provider
         self._clock = clock
         self._max_provider_steps = max_provider_steps
         self._max_tool_calls = max_tool_calls
@@ -223,6 +225,7 @@ class AgentCore:
         reply = await self._provider.complete(
             ProviderRequest(
                 messages=binding.initiating_context,
+                system_instructions=self._system_instructions(),
                 tools=self.list_tools(),
                 tool_results=resolution.prior_tool_results + (tool_result,),
                 skills=tuple(
@@ -321,6 +324,7 @@ class AgentCore:
             reply = await self._provider.complete(
                 ProviderRequest(
                     messages=provider_messages,
+                    system_instructions=self._system_instructions(),
                     tools=self.list_tools(),
                     tool_results=tuple(tool_results),
                     skills=tuple(
@@ -443,6 +447,11 @@ class AgentCore:
     ) -> None:
         if self._conversation_history is not None:
             self._conversation_history.append(conversation_id, messages)
+
+    def _system_instructions(self) -> str:
+        if self._system_instructions_provider is None:
+            return ""
+        return self._system_instructions_provider().strip()
 
     def _runtime_event(
         self,

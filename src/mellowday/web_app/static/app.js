@@ -8,6 +8,7 @@ const settingsPanel = document.querySelector("#settings-panel");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsClose = document.querySelector("#settings-close");
 const settingsStatus = document.querySelector("#settings-status");
+const personaForm = document.querySelector("#persona-form");
 const toolList = document.querySelector("#tool-list");
 const skillList = document.querySelector("#skill-list");
 const toolCount = document.querySelector("#tool-count");
@@ -449,6 +450,40 @@ async function loadCapabilities() {
   renderSkills(capabilities.skills);
 }
 
+async function loadPersona() {
+  const response = await fetch("/api/settings/persona");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const { persona } = await response.json();
+  for (const [name, value] of Object.entries(persona)) {
+    personaForm.elements.namedItem(name).value = value;
+  }
+}
+
+personaForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = personaForm.querySelector('button[type="submit"]');
+  button.disabled = true;
+  settingsStatus.textContent = "Saving Persona.";
+  const body = Object.fromEntries(new FormData(personaForm).entries());
+  try {
+    const response = await fetch("/api/settings/persona", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const { persona } = await response.json();
+    for (const [name, value] of Object.entries(persona)) {
+      personaForm.elements.namedItem(name).value = value;
+    }
+    settingsStatus.textContent = "Persona saved.";
+  } catch (error) {
+    settingsStatus.textContent = "Persona could not be saved.";
+  } finally {
+    button.disabled = false;
+  }
+});
+
 function renderConfirmations(confirmations) {
   confirmationList.replaceChildren();
   confirmationCount.textContent = String(confirmations.length);
@@ -610,6 +645,7 @@ async function loadSettings() {
   settingsStatus.textContent = "Loading Settings data.";
   try {
     await Promise.all([
+      loadPersona(),
       loadConversations(),
       loadCapabilities(),
       loadConfirmations(),

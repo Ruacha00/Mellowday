@@ -546,10 +546,51 @@ button:disabled {
   font-size: 0.75rem;
 }
 
-.history-settings {
+.history-settings,
+.persona-settings {
   margin-bottom: 30px;
   padding-bottom: 30px;
   border-bottom: 1px solid var(--line);
+}
+
+.persona-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 22px;
+}
+
+.persona-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.persona-form input,
+.persona-form textarea {
+  min-height: 48px;
+  padding: 12px 14px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.66);
+  font: 0.95rem/1.45 "Iowan Old Style", "Palatino Linotype", serif;
+  text-transform: none;
+}
+
+.persona-form input:focus,
+.persona-form textarea:focus {
+  border-color: var(--vermillion);
+  box-shadow: 0 0 0 3px rgba(198, 75, 54, 0.1);
+}
+
+.persona-form button {
+  width: fit-content;
+  min-height: 44px;
 }
 
 .history-settings-heading {
@@ -923,6 +964,10 @@ button:disabled {
 
   .history-detail-heading {
     flex-direction: column;
+  }
+
+  .persona-form {
+    grid-template-columns: 1fr;
   }
 
   .conversation-heading,
