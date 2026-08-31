@@ -47,6 +47,27 @@ def test_public_facade_returns_normalized_chat_content_and_lifecycle_events() ->
     assert result.events[-1].details == {"stop_reason": "final"}
 
 
+def test_public_facade_records_product_neutral_application_actions() -> None:
+    core = AgentCore(provider=FakeProvider(), clock=lambda: 42.0)
+
+    event = core.record_application_action(
+        action="created",
+        resource_type="task",
+        resource_id="task-1",
+        conversation_id="conversation-1",
+    )
+
+    assert event.type == "application_action_completed"
+    assert event.occurred_at == 42.0
+    assert event.conversation_id == "conversation-1"
+    assert event.details == {
+        "action": "created",
+        "resource_type": "task",
+        "resource_id": "task-1",
+    }
+    assert core.list_audit_events() == (event,)
+
+
 def test_provider_failure_returns_truthful_chat_and_safe_diagnostics() -> None:
     class FailingProvider:
         name = "configured-provider"

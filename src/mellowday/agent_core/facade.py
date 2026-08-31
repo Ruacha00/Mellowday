@@ -131,6 +131,24 @@ class AgentCore:
 
         return self._audit.events()
 
+    def record_application_action(
+        self,
+        *,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        conversation_id: str | None = None,
+    ) -> RuntimeEvent:
+        """Record an application-owned action without importing its domain model."""
+
+        return self._runtime_event(
+            "application_action_completed",
+            conversation_id=conversation_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+
     def request_conversation_history_reset(
         self, *, user_id: str, conversation_id: str
     ) -> tuple[PendingConfirmation, RuntimeEvent]:

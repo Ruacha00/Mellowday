@@ -341,6 +341,168 @@ def test_web_app_health_and_chat_use_the_public_agent_core_facade(
     asyncio.run(exercise_boundary())
 
 
+def test_settings_task_api_manages_persistent_tasks_with_consistent_audit(
+    tmp_path: Path,
+) -> None:
+    async def exercise_boundary() -> None:
+        database_path = tmp_path / "mellowday.sqlite3"
+        app = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=database_path,
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            invalid = await client.post("/api/settings/tasks", json={"title": " "})
+            created = await client.post(
+                "/api/settings/tasks",
+                json={
+                    "title": "Submit report",
+                    "details": "Attach charts",
+                    "deadline": "2026-09-04T17:00:00+08:00",
+                },
+            )
+            task_id = created.json()["task"]["id"]
+            retrieved = await client.get(f"/api/settings/tasks/{task_id}")
+            updated = await client.patch(
+                f"/api/settings/tasks/{task_id}",
+                json={"title": "Send report", "details": None},
+            )
+            completed = await client.post(
+                f"/api/settings/tasks/{task_id}/complete"
+            )
+            reopened = await client.post(f"/api/settings/tasks/{task_id}/reopen")
+            listed = await client.get("/api/settings/tasks")
+            deleted = await client.delete(f"/api/settings/tasks/{task_id}")
+            missing = await client.get(f"/api/settings/tasks/{task_id}")
+            audit = await client.get("/api/settings/audit")
+            capabilities = await client.get("/api/settings/capabilities")
+
+        assert invalid.status_code == 422
+        assert invalid.json()["detail"]["code"] == "invalid_task"
+        assert created.status_code == 201
+        assert retrieved.json() == created.json()
+        assert updated.json()["task"]["title"] == "Send report"
+        assert updated.json()["task"]["details"] is None
+        assert completed.json()["task"]["completed"] is True
+        assert completed.json()["task"]["completed_at"] is not None
+        assert reopened.json()["task"]["completed"] is False
+        assert reopened.json()["task"]["completed_at"] is None
+        assert listed.json()["tasks"] == [reopened.json()["task"]]
+        assert deleted.status_code == 200
+        assert deleted.json()["deleted_task"]["id"] == task_id
+        assert missing.status_code == 404
+        changes = [
+            event
+            for event in audit.json()["events"]
+            if event["type"] == "application_action_completed"
+        ]
+        assert [event["details"]["action"] for event in changes] == [
+            "created",
+            "updated",
+            "completed",
+            "reopened",
+            "deleted",
+        ]
+        assert all(event["details"]["resource_type"] == "task" for event in changes)
+        assert all(event["conversation_id"] is None for event in changes)
+        assert {tool["name"] for tool in capabilities.json()["tools"]} >= {
+            "task_create",
+            "task_get",
+            "task_list",
+            "task_update",
+            "task_complete",
+            "task_reopen",
+            "task_delete",
+        }
+
+        restarted = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=database_path,
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=restarted), base_url="http://test"
+        ) as client:
+            persisted = await client.get("/api/settings/tasks")
+        assert persisted.json() == {"tasks": []}
+
+    asyncio.run(exercise_boundary())
+
+
+def test_chat_creates_a_task_only_when_the_provider_uses_the_registered_tool(
+    tmp_path: Path,
+) -> None:
+    class TaskIntentProvider:
+        name = "task-intent-script"
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            if request.tool_results:
+                return ProviderReply(content="I added the report Task for Friday.")
+            latest = request.messages[-1].content
+            if latest == "Add a task to submit the report Friday.":
+                return ProviderReply(
+                    tool_calls=(
+                        ToolCall(
+                            "create-report",
+                            "task_create",
+                            {"title": "Submit report", "deadline": "2026-09-04"},
+                        ),
+                    )
+                )
+            return ProviderReply(content="That sounds like a busy Friday.")
+
+    async def exercise_boundary() -> None:
+        app = create_app(
+            provider=TaskIntentProvider(),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            mention = await client.post(
+                "/api/chat",
+                json={
+                    "conversation_id": "main",
+                    "content": "The report is due Friday.",
+                },
+            )
+            before = await client.get("/api/settings/tasks")
+            created = await client.post(
+                "/api/chat",
+                json={
+                    "conversation_id": "main",
+                    "content": "Add a task to submit the report Friday.",
+                },
+            )
+            after = await client.get("/api/settings/tasks")
+            audit = await client.get("/api/settings/audit")
+            capabilities = await client.get("/api/settings/capabilities")
+
+        assert mention.json()["chat_content"]["content"] == (
+            "That sounds like a busy Friday."
+        )
+        assert before.json() == {"tasks": []}
+        assert created.json()["chat_content"]["content"] == (
+            "I added the report Task for Friday."
+        )
+        assert len(after.json()["tasks"]) == 1
+        assert after.json()["tasks"][0]["deadline"] == "2026-09-04"
+        task_events = [
+            event
+            for event in audit.json()["events"]
+            if event["type"] == "application_action_completed"
+        ]
+        assert task_events[0]["conversation_id"] == "main"
+        tool_names = {tool["name"] for tool in capabilities.json()["tools"]}
+        assert "task_create" in tool_names
+        assert not any("reminder" in name for name in tool_names)
+
+    asyncio.run(exercise_boundary())
+
+
 def test_settings_lists_neutral_capability_metadata_without_loading_skills(
     tmp_path: Path,
 ) -> None:
@@ -379,25 +541,26 @@ def test_settings_lists_neutral_capability_metadata_without_loading_skills(
             response = await client.get("/api/settings/capabilities")
 
         assert response.status_code == 200
-        assert response.json() == {
-            "tools": [
-                {
-                    "name": "status_read",
-                    "description": "Read local status.",
-                    "input_schema": {"type": "object", "properties": {}},
-                    "permission_requirements": ["status:read"],
-                    "side_effect": "none",
-                    "risk": "low",
-                }
-            ],
-            "skills": [
-                {
-                    "name": "plain_language",
-                    "description": "Explain status in plain language.",
-                    "enabled": True,
-                }
-            ],
+        payload = response.json()
+        status_tool = next(
+            item for item in payload["tools"] if item["name"] == "status_read"
+        )
+        assert status_tool == {
+            "name": "status_read",
+            "description": "Read local status.",
+            "input_schema": {"type": "object", "properties": {}},
+            "permission_requirements": ["status:read"],
+            "side_effect": "none",
+            "risk": "low",
         }
+        assert payload["skills"] == [
+            {
+                "name": "plain_language",
+                "description": "Explain status in plain language.",
+                "enabled": True,
+            }
+        ]
+        assert "task_create" in {item["name"] for item in payload["tools"]}
         assert loads == []
 
     asyncio.run(exercise_boundary())

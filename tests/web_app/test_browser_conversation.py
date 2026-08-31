@@ -180,6 +180,40 @@ def test_user_can_view_and_edit_the_single_persona_from_settings(
         browser.close()
 
 
+def test_user_can_manage_tasks_from_settings(tmp_path: Path) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.on("dialog", lambda dialog: dialog.accept())
+        page.goto(base_url)
+        page.get_by_role("button", name="Settings").click()
+
+        page.get_by_label("Task title", exact=True).fill("Submit report")
+        page.get_by_label("Task details", exact=True).fill("Attach charts")
+        page.get_by_label("Task deadline", exact=True).fill("2026-09-04")
+        page.get_by_role("button", name="Add Task").click()
+
+        expect(page.locator("#settings-status")).to_have_text("Task added.")
+        expect(page.get_by_text("Submit report", exact=True)).to_be_visible()
+        expect(page.get_by_text("Attach charts", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Complete Submit report").click()
+        expect(page.get_by_role("button", name="Reopen Submit report")).to_be_visible()
+        page.get_by_role("button", name="Reopen Submit report").click()
+        page.get_by_role("button", name="Edit Submit report").click()
+        page.get_by_label("Task title", exact=True).fill("Send report")
+        page.get_by_role("button", name="Save Task").click()
+        expect(page.get_by_text("Send report", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Delete Send report").click()
+        expect(page.get_by_text("No Tasks yet.", exact=True)).to_be_visible()
+        browser.close()
+
+
 def test_user_can_manage_model_providers_from_settings(tmp_path: Path) -> None:
     class ValidTransport:
         async def request(
