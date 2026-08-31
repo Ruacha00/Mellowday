@@ -8,7 +8,7 @@ import uvicorn
 from fastapi import FastAPI
 from playwright.sync_api import expect, sync_playwright
 
-from mellowday.agent_core import FakeProvider
+from mellowday.agent_core import FakeProvider, Skill, Tool
 from mellowday.web_app import create_app
 
 
@@ -60,4 +60,59 @@ def test_user_can_chat_from_the_conversation_surface() -> None:
         expect(page.locator('[data-role="assistant"] p').last).to_have_text(
             "I heard: Hello from Mellowday"
         )
+        browser.close()
+
+
+def test_user_can_inspect_and_manage_capabilities_from_settings() -> None:
+    loads: list[str] = []
+
+    async def read_status(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        return {"conversation_id": conversation_id, **arguments}
+
+    app = create_app(
+        provider=FakeProvider(),
+        tools=(
+            Tool(
+                name="status_read",
+                description="Read local status.",
+                input_schema={"type": "object", "properties": {}},
+                executor=read_status,
+                permission_requirements=("status:read",),
+                side_effect="none",
+                risk="low",
+            ),
+        ),
+        skills=(
+            Skill(
+                name="plain_language",
+                description="Explain status in plain language.",
+                instruction_loader=(
+                    lambda: loads.append("loaded") or "Use plain language."
+                ),
+            ),
+        ),
+        skill_state_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        page.wait_for_load_state("networkidle")
+
+        page.get_by_role("button", name="Settings").click()
+
+        expect(page.get_by_role("heading", name="Capabilities")).to_be_visible()
+        expect(page.get_by_text("status_read", exact=True)).to_be_visible()
+        expect(page.get_by_text("status:read", exact=True)).to_be_visible()
+        expect(page.get_by_text("plain_language", exact=True)).to_be_visible()
+        enablement = page.get_by_role(
+            "checkbox", name="Enable plain_language Skill"
+        )
+        expect(enablement).to_be_checked()
+        enablement.uncheck()
+        expect(page.get_by_text("Disabled", exact=True)).to_be_visible()
+        assert loads == []
         browser.close()

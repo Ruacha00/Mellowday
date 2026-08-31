@@ -19,7 +19,16 @@
             <h1>Mellowday</h1>
           </div>
         </div>
-        <p class="day-note">A quiet place for what’s on your mind.</p>
+        <div class="masthead-actions">
+          <p class="day-note">A quiet place for what’s on your mind.</p>
+          <button
+            id="settings-toggle"
+            class="management-button"
+            type="button"
+            aria-controls="settings-panel"
+            aria-expanded="false"
+          >Settings</button>
+        </div>
       </header>
 
       <section class="conversation" aria-labelledby="conversation-title">
@@ -56,6 +65,47 @@
           </div>
           <p id="composer-status" class="composer-status" role="status">Ready when you are.</p>
         </form>
+      </section>
+
+      <section
+        id="settings-panel"
+        class="settings-panel"
+        aria-labelledby="settings-title"
+        hidden
+      >
+        <header class="settings-heading">
+          <div>
+            <p class="section-number">02 / Settings</p>
+            <h2 id="settings-title">Capabilities</h2>
+            <p class="settings-intro">
+              Registered extensions available to Agent Core. Metadata here is
+              operational and does not use the Assistant Persona.
+            </p>
+          </div>
+          <button id="settings-close" class="management-button" type="button">
+            Back to conversation
+          </button>
+        </header>
+
+        <p id="settings-status" class="settings-status" role="status"></p>
+
+        <div class="capability-columns">
+          <section class="capability-section" aria-labelledby="tools-title">
+            <div class="capability-section-heading">
+              <h3 id="tools-title">Tools</h3>
+              <span id="tool-count" class="count-mark">0</span>
+            </div>
+            <div id="tool-list" class="capability-list"></div>
+          </section>
+
+          <section class="capability-section" aria-labelledby="skills-title">
+            <div class="capability-section-heading">
+              <h3 id="skills-title">Skills</h3>
+              <span id="skill-count" class="count-mark">0</span>
+            </div>
+            <div id="skill-list" class="capability-list"></div>
+          </section>
+        </div>
       </section>
     </main>
   </body>

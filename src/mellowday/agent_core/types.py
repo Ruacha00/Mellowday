@@ -10,6 +10,12 @@ EventType = Literal[
     "turn_started",
     "provider_started",
     "provider_completed",
+    "tool_execution_started",
+    "tool_execution_completed",
+    "tool_execution_failed",
+    "skill_load_started",
+    "skill_loaded",
+    "skill_load_failed",
     "turn_completed",
 ]
 
@@ -24,6 +30,7 @@ class ChatContent:
 class TurnRequest:
     conversation_id: str
     messages: tuple[ChatContent, ...]
+    requested_skills: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
