@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f1eadc" />
+    <title>Mellowday · Conversation</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <main class="conversation-shell">
+      <header class="masthead">
+        <div class="wordmark">
+          <span class="sun-mark" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow">Your local companion</p>
+            <h1>Mellowday</h1>
+          </div>
+        </div>
+        <p class="day-note">A quiet place for what’s on your mind.</p>
+      </header>
+
+      <section class="conversation" aria-labelledby="conversation-title">
+        <div class="conversation-heading">
+          <div>
+            <p class="section-number">01 / Conversation</p>
+            <h2 id="conversation-title">Take your time.</h2>
+          </div>
+          <span class="local-badge">Local · Fake Provider</span>
+        </div>
+
+        <ol id="messages" class="messages" aria-live="polite" aria-relevant="additions">
+          <li class="welcome-note">
+            <span aria-hidden="true">悠</span>
+            <p>Start anywhere. Say hello, share a thought, or simply see where the moment goes.</p>
+          </li>
+        </ol>
+
+        <form id="conversation-form" class="composer">
+          <label for="message-input">Message</label>
+          <div class="composer-row">
+            <textarea
+              id="message-input"
+              name="message"
+              rows="1"
+              placeholder="Write what’s on your mind…"
+              autocomplete="off"
+              required
+            ></textarea>
+            <button type="submit">
+              <span>Send</span>
+              <span class="arrow" aria-hidden="true">↗</span>
+            </button>
+          </div>
+          <p id="composer-status" class="composer-status" role="status">Ready when you are.</p>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

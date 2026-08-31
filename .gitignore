@@ -1,2 +1,12 @@
 # Read-only reference project; never track or upload.
 /chatbot/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.pytest-tmp/
+.venv/
+build/
+dist/
