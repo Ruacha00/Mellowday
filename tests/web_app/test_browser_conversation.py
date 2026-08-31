@@ -3,9 +3,11 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
+from httpx import Client
 from playwright.sync_api import expect, sync_playwright
 
 from mellowday.agent_core import (
@@ -51,8 +53,12 @@ def running_server(app: FastAPI) -> Iterator[str]:
             raise RuntimeError("test server did not stop")
 
 
-def test_user_can_chat_from_the_conversation_surface() -> None:
-    app = create_app(provider=FakeProvider(), audit_path=None)
+def test_user_can_chat_from_the_conversation_surface(tmp_path: Path) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
 
     with running_server(app) as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -72,7 +78,9 @@ def test_user_can_chat_from_the_conversation_surface() -> None:
         browser.close()
 
 
-def test_user_can_inspect_and_manage_capabilities_from_settings() -> None:
+def test_user_can_inspect_and_manage_capabilities_from_settings(
+    tmp_path: Path,
+) -> None:
     loads: list[str] = []
 
     async def read_status(
@@ -103,6 +111,7 @@ def test_user_can_inspect_and_manage_capabilities_from_settings() -> None:
             ),
         ),
         skill_state_path=None,
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
         audit_path=None,
     )
 
@@ -114,7 +123,7 @@ def test_user_can_inspect_and_manage_capabilities_from_settings() -> None:
 
         page.get_by_role("button", name="Settings").click()
 
-        expect(page.get_by_role("heading", name="Capabilities")).to_be_visible()
+        expect(page.get_by_role("heading", name="Settings", exact=True)).to_be_visible()
         expect(page.get_by_text("status_read", exact=True)).to_be_visible()
         expect(page.get_by_text("status:read", exact=True)).to_be_visible()
         expect(page.get_by_text("plain_language", exact=True)).to_be_visible()
@@ -128,7 +137,103 @@ def test_user_can_inspect_and_manage_capabilities_from_settings() -> None:
         browser.close()
 
 
-def test_user_can_reject_pending_confirmation_from_settings() -> None:
+def test_conversation_history_survives_a_real_backend_restart(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "mellowday.sqlite3"
+
+    with running_server(
+        create_app(
+            provider=FakeProvider(),
+            conversation_database_path=database_path,
+            audit_path=None,
+        )
+    ) as base_url:
+        with Client(base_url=base_url) as client:
+            response = client.post(
+                "/api/chat",
+                json={"conversation_id": "restart", "content": "Persist me"},
+            )
+        assert response.status_code == 200
+
+    with running_server(
+        create_app(
+            provider=FakeProvider(),
+            conversation_database_path=database_path,
+            audit_path=None,
+        )
+    ) as base_url:
+        with Client(base_url=base_url) as client:
+            persisted = client.get("/api/conversations/restart")
+
+    assert persisted.status_code == 200
+    assert persisted.json()["messages"] == [
+        {"role": "user", "content": "Persist me"},
+        {"role": "assistant", "content": "I heard: Persist me"},
+    ]
+
+
+def test_settings_reviews_and_resets_conversation_history(tmp_path: Path) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        console_errors: list[str] = []
+        page.on(
+            "console",
+            lambda message: console_errors.append(message.text)
+            if message.type == "error"
+            else None,
+        )
+        page.goto(base_url)
+        page.wait_for_load_state("networkidle")
+
+        page.get_by_label("Message").fill("A message to review")
+        page.get_by_role("button", name="Send").click()
+        expect(page.locator('[data-role="assistant"] p').last).to_have_text(
+            "I heard: A message to review"
+        )
+
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        expect(page.locator('[data-role="user"] p').last).to_have_text(
+            "A message to review"
+        )
+
+        page.get_by_role("button", name="Settings").click()
+        expect(
+            page.get_by_role("heading", name="Conversation History")
+        ).to_be_visible()
+        page.get_by_role("button", name="main · 2 messages").click()
+        history_settings = page.get_by_label("Conversation History")
+        expect(history_settings.locator("#history-metadata")).to_contain_text(
+            "2 messages · 47 characters"
+        )
+        expect(
+            history_settings.get_by_text("A message to review", exact=True)
+        ).to_be_visible()
+        expect(
+            history_settings.get_by_text(
+                "I heard: A message to review", exact=True
+            )
+        ).to_be_visible()
+
+        page.get_by_role("button", name="Reset conversation").click()
+        expect(page.get_by_text("No conversations yet.")).to_be_visible()
+        page.get_by_role("button", name="Back to conversation").click()
+        expect(page.locator('[data-role="user"]')).to_have_count(0)
+        assert console_errors == []
+        browser.close()
+
+
+def test_user_can_reject_pending_confirmation_from_settings(
+    tmp_path: Path,
+) -> None:
     executions: list[dict[str, object]] = []
 
     class ConfirmationProvider:
@@ -176,6 +281,7 @@ def test_user_can_reject_pending_confirmation_from_settings() -> None:
                 risk="high",
             ),
         ),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
         audit_path=None,
     )
 
@@ -209,7 +315,7 @@ def test_user_can_reject_pending_confirmation_from_settings() -> None:
         browser.close()
 
 
-def test_user_can_inspect_undo_metadata_in_audit_history() -> None:
+def test_user_can_inspect_undo_metadata_in_audit_history(tmp_path: Path) -> None:
     class UndoProvider:
         name = "undo-script"
 
@@ -257,6 +363,7 @@ def test_user_can_inspect_undo_metadata_in_audit_history() -> None:
                 side_effect="reversible",
             ),
         ),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
         audit_path=None,
     )
 

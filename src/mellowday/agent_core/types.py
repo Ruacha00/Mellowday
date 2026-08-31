@@ -36,6 +36,13 @@ EventType = Literal[
     "skill_enablement_changed",
     "turn_limit_reached",
     "turn_completed",
+    "conversation_history_initialized",
+    "conversation_history_loaded",
+    "conversation_history_appended",
+    "conversation_history_listed",
+    "conversation_history_read",
+    "conversation_history_reset",
+    "conversation_history_failed",
 ]
 
 

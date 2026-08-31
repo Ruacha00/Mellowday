@@ -4,6 +4,7 @@ from pathlib import Path
 from httpx import ASGITransport, AsyncClient
 
 from mellowday.agent_core import (
+    ChatContent,
     FakeProvider,
     ProviderReply,
     ProviderRequest,
@@ -14,9 +15,244 @@ from mellowday.agent_core import (
 from mellowday.web_app import create_app
 
 
-def test_web_app_health_and_chat_use_the_public_agent_core_facade() -> None:
+class ContextEchoProvider:
+    name = "context-echo"
+
+    async def complete(self, request: ProviderRequest) -> ProviderReply:
+        rendered = " | ".join(
+            f"{message.role}:{message.content}" for message in request.messages
+        )
+        return ProviderReply(content=rendered)
+
+
+def test_conversation_history_survives_backend_restart_and_is_isolated(
+    tmp_path: Path,
+) -> None:
     async def exercise_boundary() -> None:
-        app = create_app(provider=FakeProvider(), audit_path=None)
+        database_path = tmp_path / "data" / "mellowday.sqlite3"
+
+        first_app = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=database_path,
+            audit_path=None,
+        )
+        first_transport = ASGITransport(app=first_app)
+        async with AsyncClient(
+            transport=first_transport, base_url="http://test"
+        ) as client:
+            alpha = await client.post(
+                "/api/chat",
+                json={"conversation_id": "alpha", "content": "First message"},
+            )
+            beta = await client.post(
+                "/api/chat",
+                json={"conversation_id": "beta", "content": "Separate message"},
+            )
+
+        assert alpha.status_code == 200
+        assert beta.status_code == 200
+
+        restarted_app = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=database_path,
+            audit_path=None,
+        )
+        restarted_transport = ASGITransport(app=restarted_app)
+        async with AsyncClient(
+            transport=restarted_transport, base_url="http://test"
+        ) as client:
+            conversations = await client.get("/api/conversations")
+            alpha_history = await client.get("/api/conversations/alpha")
+            beta_history = await client.get("/api/conversations/beta")
+
+        assert conversations.status_code == 200
+        rows = conversations.json()["conversations"]
+        assert [row["conversation_id"] for row in rows] == ["beta", "alpha"]
+        assert [row["message_count"] for row in rows] == [2, 2]
+        assert [row["character_count"] for row in rows] == [41, 35]
+        assert all(row["created_at"] > 0 for row in rows)
+        assert all(row["updated_at"] >= row["created_at"] for row in rows)
+        assert alpha_history.status_code == 200
+        assert alpha_history.json()["messages"] == [
+            {"role": "user", "content": "First message"},
+            {"role": "assistant", "content": "I heard: First message"},
+        ]
+        assert beta_history.status_code == 200
+        assert beta_history.json()["messages"] == [
+            {"role": "user", "content": "Separate message"},
+            {"role": "assistant", "content": "I heard: Separate message"},
+        ]
+
+    asyncio.run(exercise_boundary())
+
+
+def test_agent_core_receives_bounded_recent_history_through_the_web_app(
+    tmp_path: Path,
+) -> None:
+    async def exercise_boundary() -> None:
+        database_path = tmp_path / "mellowday.sqlite3"
+        initial_app = create_app(
+            provider=ContextEchoProvider(),
+            conversation_database_path=database_path,
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=initial_app), base_url="http://test"
+        ) as client:
+            first = await client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "one"},
+            )
+        assert first.json()["chat_content"]["content"] == "user:one"
+
+        message_limited_app = create_app(
+            provider=ContextEchoProvider(),
+            conversation_database_path=database_path,
+            history_message_limit=1,
+            history_context_limit=100,
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=message_limited_app),
+            base_url="http://test",
+        ) as client:
+            second = await client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "two"},
+            )
+        assert second.json()["chat_content"]["content"] == (
+            "assistant:user:one | user:two"
+        )
+
+        context_limited_app = create_app(
+            provider=ContextEchoProvider(),
+            conversation_database_path=database_path,
+            history_message_limit=40,
+            history_context_limit=8,
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=context_limited_app),
+            base_url="http://test",
+        ) as client:
+            third = await client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "three"},
+            )
+        assert third.json()["chat_content"]["content"] == "user:three"
+
+    asyncio.run(exercise_boundary())
+
+
+def test_settings_resets_only_selected_history_and_reports_structured_events(
+    tmp_path: Path,
+) -> None:
+    async def exercise_boundary() -> None:
+        app = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.post(
+                "/api/chat",
+                json={"conversation_id": "keep", "content": "Keep this"},
+            )
+            await client.post(
+                "/api/chat",
+                json={"conversation_id": "reset", "content": "Remove this"},
+            )
+            before_reset = await client.get("/api/events/recent")
+            reset = await client.post("/api/conversations/reset/reset")
+            reset_history = await client.get("/api/conversations/reset")
+            kept_history = await client.get("/api/conversations/keep")
+            after_reset = await client.get("/api/events/recent")
+
+        assert before_reset.status_code == 200
+        before_types = [event["type"] for event in before_reset.json()["events"]]
+        assert before_types == [
+            "conversation_history_initialized",
+            "conversation_history_loaded",
+            "conversation_history_appended",
+            "conversation_history_loaded",
+            "conversation_history_appended",
+        ]
+        assert before_reset.json()["events"][0]["details"] == {
+            "from_version": 0,
+            "schema_version": 1,
+        }
+        assert reset.status_code == 200
+        assert reset.json() == {"ok": True, "removed_messages": 2}
+        assert reset_history.status_code == 404
+        assert kept_history.status_code == 200
+        assert [message["content"] for message in kept_history.json()["messages"]] == [
+            "Keep this",
+            "I heard: Keep this",
+        ]
+        reset_events = [
+            event
+            for event in after_reset.json()["events"]
+            if event["type"] == "conversation_history_reset"
+        ]
+        assert len(reset_events) == 1
+        assert reset_events[0]["conversation_id"] == "reset"
+        assert reset_events[0]["details"] == {"removed_messages": 2}
+
+    asyncio.run(exercise_boundary())
+
+
+def test_conversation_history_failures_are_diagnosable_through_the_web_app(
+    tmp_path: Path,
+) -> None:
+    async def exercise_boundary() -> None:
+        database_path = tmp_path / "mellowday.sqlite3"
+        app = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=database_path,
+            audit_path=None,
+        )
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            await client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "Before failure"},
+            )
+            database_path.write_text("not a sqlite database", encoding="utf-8")
+
+            failed = await client.get("/api/conversations")
+            events = await client.get("/api/events/recent")
+
+        assert failed.status_code == 503
+        assert failed.json() == {
+            "detail": {
+                "code": "conversation_history_unavailable",
+                "operation": "list",
+            }
+        }
+        failure_events = [
+            event
+            for event in events.json()["events"]
+            if event["type"] == "conversation_history_failed"
+        ]
+        assert len(failure_events) == 1
+        assert failure_events[0]["details"]["operation"] == "list"
+        assert failure_events[0]["details"]["error_type"] == "DatabaseError"
+        assert "database" in failure_events[0]["details"]["message"].lower()
+
+    asyncio.run(exercise_boundary())
+
+
+def test_web_app_health_and_chat_use_the_public_agent_core_facade(
+    tmp_path: Path,
+) -> None:
+    async def exercise_boundary() -> None:
+        app = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            audit_path=None,
+        )
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             health = await client.get("/healthz")
@@ -51,7 +287,9 @@ def test_web_app_health_and_chat_use_the_public_agent_core_facade() -> None:
     asyncio.run(exercise_boundary())
 
 
-def test_settings_lists_neutral_capability_metadata_without_loading_skills() -> None:
+def test_settings_lists_neutral_capability_metadata_without_loading_skills(
+    tmp_path: Path,
+) -> None:
     loads: list[str] = []
 
     async def inspect_status(
@@ -79,6 +317,7 @@ def test_settings_lists_neutral_capability_metadata_without_loading_skills() -> 
             provider=FakeProvider(),
             tools=(tool,),
             skills=(skill,),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
             audit_path=None,
         )
         transport = ASGITransport(app=app)
@@ -123,6 +362,7 @@ def test_settings_persists_local_skill_enablement(tmp_path: Path) -> None:
             provider=FakeProvider(),
             skills=(skill,),
             skill_state_path=state_file,
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
             audit_path=None,
         )
         transport = ASGITransport(app=app)
@@ -152,6 +392,7 @@ def test_settings_persists_local_skill_enablement(tmp_path: Path) -> None:
             provider=FakeProvider(),
             skills=(skill,),
             skill_state_path=state_file,
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
             audit_path=None,
         )
         restarted_transport = ASGITransport(app=restarted)
@@ -165,7 +406,7 @@ def test_settings_persists_local_skill_enablement(tmp_path: Path) -> None:
     asyncio.run(disable_and_restart())
 
 
-def test_settings_inspects_and_accepts_pending_confirmation() -> None:
+def test_settings_inspects_and_accepts_pending_confirmation(tmp_path: Path) -> None:
     executions: list[dict[str, object]] = []
 
     class ConfirmationProvider:
@@ -214,6 +455,7 @@ def test_settings_inspects_and_accepts_pending_confirmation() -> None:
                     risk="high",
                 ),
             ),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
             audit_path=None,
         )
         transport = ASGITransport(app=app)
