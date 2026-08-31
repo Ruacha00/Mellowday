@@ -279,6 +279,46 @@
           <div id="reminder-list" class="task-list" aria-live="polite"></div>
         </section>
 
+        <section class="task-settings" aria-labelledby="calendar-event-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Life Records</p>
+              <h3 id="calendar-event-settings-title">Calendar Events</h3>
+              <p class="capability-description">
+                Reserve time explicitly. Calendar Events do not create Tasks or Reminders.
+              </p>
+            </div>
+            <span class="local-badge">Local Calendar</span>
+          </header>
+
+          <form id="calendar-event-form" class="task-form">
+            <input name="event_id" type="hidden" />
+            <label>
+              <span>Calendar Event title</span>
+              <input name="title" autocomplete="off" required aria-label="Calendar Event title" />
+            </label>
+            <label>
+              <span>Calendar Event start time</span>
+              <input name="start_at" type="datetime-local" required aria-label="Calendar Event start time" />
+            </label>
+            <label>
+              <span>Calendar Event end time (optional)</span>
+              <input name="end_at" type="datetime-local" aria-label="Calendar Event end time" />
+            </label>
+            <label>
+              <span>Calendar Event details (optional)</span>
+              <textarea name="details" rows="2" aria-label="Calendar Event details"></textarea>
+            </label>
+            <div class="task-form-actions">
+              <button type="submit">Add Calendar Event</button>
+              <button id="cancel-calendar-event-edit" class="text-button" type="button" hidden>
+                Cancel edit
+              </button>
+            </div>
+          </form>
+          <div id="calendar-event-list" class="task-list" aria-live="polite"></div>
+        </section>
+
         <section class="provider-settings" aria-labelledby="provider-settings-title">
           <header class="history-settings-heading">
             <div>

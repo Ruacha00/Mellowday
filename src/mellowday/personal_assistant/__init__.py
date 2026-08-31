@@ -1,5 +1,15 @@
 """Personal Assistant domain capabilities."""
 
+from .calendar_events import (
+    CalendarEvent,
+    CalendarEventChange,
+    CalendarEventNotFoundError,
+    CalendarEventOperation,
+    CalendarEventUpdates,
+    CalendarEventValidationError,
+    SQLiteCalendarEventService,
+)
+from .calendar_event_tools import build_calendar_event_tools
 from .persona import Persona, SQLitePersonaStore
 from .note_tools import build_note_tools
 from .notes import (
@@ -35,6 +45,12 @@ from .tasks import (
 )
 
 __all__ = [
+    "CalendarEvent",
+    "CalendarEventChange",
+    "CalendarEventNotFoundError",
+    "CalendarEventOperation",
+    "CalendarEventUpdates",
+    "CalendarEventValidationError",
     "Persona",
     "Note",
     "NoteChange",
@@ -52,6 +68,7 @@ __all__ = [
     "ReminderUpdates",
     "ReminderValidationError",
     "SQLitePersonaStore",
+    "SQLiteCalendarEventService",
     "SQLiteNoteService",
     "SQLiteReminderService",
     "SQLiteTaskService",
@@ -61,6 +78,7 @@ __all__ = [
     "TaskUpdates",
     "TaskValidationError",
     "build_task_tools",
+    "build_calendar_event_tools",
     "build_note_tools",
     "build_reminder_tools",
 ]

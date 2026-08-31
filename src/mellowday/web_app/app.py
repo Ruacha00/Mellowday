@@ -37,6 +37,10 @@ from mellowday.agent_core.openai_compatible import (
     ProviderTransport,
 )
 from mellowday.personal_assistant import (
+    CalendarEvent,
+    CalendarEventChange,
+    CalendarEventUpdates,
+    CalendarEventValidationError,
     NoteChange,
     NoteChangeNotificationError,
     NoteUpdates,
@@ -47,6 +51,7 @@ from mellowday.personal_assistant import (
     ReminderScheduler,
     ReminderUpdates,
     ReminderValidationError,
+    SQLiteCalendarEventService,
     SQLiteNoteService,
     SQLitePersonaStore,
     SQLiteReminderService,
@@ -54,6 +59,7 @@ from mellowday.personal_assistant import (
     TaskChange,
     TaskUpdates,
     TaskValidationError,
+    build_calendar_event_tools,
     build_note_tools,
     build_reminder_tools,
     build_task_tools,
@@ -166,6 +172,20 @@ class NoteUpdateBody(BaseModel):
     title: str | None = None
 
 
+class CalendarEventCreateBody(BaseModel):
+    title: str = Field(min_length=1)
+    start_at: str = Field(min_length=1)
+    end_at: str | None = Field(default=None, min_length=1)
+    details: str | None = None
+
+
+class CalendarEventUpdateBody(BaseModel):
+    title: str | None = Field(default=None, min_length=1)
+    start_at: str | None = Field(default=None, min_length=1)
+    end_at: str | None = Field(default=None, min_length=1)
+    details: str | None = None
+
+
 def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
     return ConfirmationBinding(
         user_id=body.user_id,
@@ -201,6 +221,7 @@ def create_app(
     history_message_limit: int = 40,
     history_character_limit: int = 12_000,
     provider_transport: ProviderTransport | None = None,
+    installation_timezone: str = "UTC",
     reminder_clock: Callable[[], float] = time.time,
     reminder_poll_interval: float = 1.0,
 ) -> FastAPI:
@@ -258,10 +279,35 @@ def create_app(
         clock=reminder_clock,
         change_listener=record_reminder_change,
     )
+
+    def record_calendar_event_change(change: CalendarEventChange) -> None:
+        agent_core_reference[0].record_application_action(
+            action=change.operation,
+            resource_type="calendar_event",
+            resource_id=change.event_id,
+            conversation_id=change.conversation_id,
+        )
+
+    calendar_event_service = SQLiteCalendarEventService(
+        database_path,
+        installation_timezone=installation_timezone,
+        change_listener=record_calendar_event_change,
+    )
+
+    def calendar_event_payload(event: CalendarEvent) -> dict[str, object]:
+        return {
+            "calendar_event": asdict(event),
+            "conflicts": [
+                asdict(conflict)
+                for conflict in calendar_event_service.conflicts_for(event.id)
+            ],
+        }
+
     registered_tools = (
         *build_task_tools(task_service),
         *build_note_tools(note_service),
         *build_reminder_tools(reminder_service),
+        *build_calendar_event_tools(calendar_event_service),
         *tuple(tools),
     )
     provider_health: dict[str, dict[str, object]] = {}
@@ -394,6 +440,20 @@ def create_app(
             status_code=422,
             content={
                 "detail": {"code": "invalid_note", "message": str(error)}
+            },
+        )
+
+    @app.exception_handler(CalendarEventValidationError)
+    async def calendar_event_validation_failure(
+        _request: Request, error: CalendarEventValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "code": "invalid_calendar_event",
+                    "message": str(error),
+                }
             },
         )
 
@@ -1017,6 +1077,103 @@ def create_app(
             "ok": True,
             "decision": decision,
             "deleted_reminder": asdict(reminder),
+            "event": asdict(event),
+        }
+
+    @app.get("/api/settings/calendar-events")
+    async def list_calendar_events() -> dict[str, object]:
+        events = calendar_event_service.list()
+        return {
+            "calendar_events": [asdict(event) for event in events],
+            "conflicts": {
+                event.id: [
+                    asdict(conflict)
+                    for conflict in calendar_event_service.conflicts_for(event.id)
+                ]
+                for event in events
+            },
+        }
+
+    @app.post("/api/settings/calendar-events", status_code=201)
+    async def create_calendar_event(
+        body: CalendarEventCreateBody,
+    ) -> dict[str, object]:
+        event = calendar_event_service.create(**body.model_dump())
+        return calendar_event_payload(event)
+
+    @app.get("/api/settings/calendar-events/{event_id}")
+    async def get_calendar_event(event_id: str) -> dict[str, object]:
+        event = calendar_event_service.get(event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Calendar Event not found")
+        return calendar_event_payload(event)
+
+    @app.patch("/api/settings/calendar-events/{event_id}")
+    async def update_calendar_event(
+        event_id: str, body: CalendarEventUpdateBody
+    ) -> dict[str, object]:
+        updates = cast(
+            CalendarEventUpdates, body.model_dump(exclude_unset=True)
+        )
+        if "title" in updates and updates["title"] is None:
+            raise CalendarEventValidationError("title must not be null")
+        if "start_at" in updates and updates["start_at"] is None:
+            raise CalendarEventValidationError("start_at must not be null")
+        event = calendar_event_service.update(event_id, **updates)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Calendar Event not found")
+        return calendar_event_payload(event)
+
+    @app.post("/api/settings/calendar-events/{event_id}/delete-confirmation")
+    async def request_calendar_event_delete_confirmation(
+        event_id: str,
+    ) -> dict[str, object]:
+        if calendar_event_service.get(event_id) is None:
+            raise HTTPException(status_code=404, detail="Calendar Event not found")
+        confirmation, event = agent_core.request_application_confirmation(
+            user_id="local-user",
+            conversation_id="settings",
+            action="calendar_event_delete",
+            arguments={"event_id": event_id},
+        )
+        return {"confirmation": asdict(confirmation), "event": asdict(event)}
+
+    @app.delete("/api/settings/calendar-events/{event_id}")
+    async def delete_calendar_event(
+        event_id: str, body: ApplicationConfirmationDecisionBody
+    ) -> dict[str, object]:
+        if (
+            body.binding.tool != "calendar_event_delete"
+            or body.binding.arguments != {"event_id": event_id}
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Confirmation is bound to a different Calendar Event action"
+                ),
+            )
+        try:
+            decision, event = agent_core.decide_application_confirmation(
+                ConfirmationDecision(
+                    confirmation_id=body.confirmation_id,
+                    binding=_confirmation_binding(body.binding),
+                    decision=body.decision,
+                )
+            )
+        except ConfirmationError as error:
+            raise HTTPException(
+                status_code=_confirmation_status_code(error.code),
+                detail="Confirmation is unavailable for this decision",
+            ) from error
+        if decision == "reject":
+            return {"ok": False, "decision": decision, "event": asdict(event)}
+        calendar_event = calendar_event_service.delete(event_id)
+        if calendar_event is None:
+            raise HTTPException(status_code=404, detail="Calendar Event not found")
+        return {
+            "ok": True,
+            "decision": decision,
+            "deleted_calendar_event": asdict(calendar_event),
             "event": asdict(event),
         }
 
