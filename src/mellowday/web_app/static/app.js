@@ -9,6 +9,9 @@ const settingsToggle = document.querySelector("#settings-toggle");
 const settingsClose = document.querySelector("#settings-close");
 const settingsStatus = document.querySelector("#settings-status");
 const personaForm = document.querySelector("#persona-form");
+const providerForm = document.querySelector("#provider-form");
+const providerList = document.querySelector("#provider-list");
+const cancelProviderEdit = document.querySelector("#cancel-provider-edit");
 const toolList = document.querySelector("#tool-list");
 const skillList = document.querySelector("#skill-list");
 const toolCount = document.querySelector("#tool-count");
@@ -459,6 +462,186 @@ async function loadPersona() {
   }
 }
 
+function resetProviderForm() {
+  providerForm.reset();
+  providerForm.elements.namedItem("provider_id").value = "";
+  providerForm.elements.namedItem("timeout_seconds").value = "60";
+  providerForm.elements.namedItem("max_retries").value = "2";
+  providerForm.querySelector('button[type="submit"]').textContent = "Add Provider";
+  cancelProviderEdit.hidden = true;
+}
+
+function editProvider(provider) {
+  for (const name of ["name", "base_url", "model", "timeout_seconds", "max_retries"]) {
+    providerForm.elements.namedItem(name).value = provider[name];
+  }
+  providerForm.elements.namedItem("provider_id").value = provider.id;
+  providerForm.elements.namedItem("api_key").value = "";
+  providerForm.querySelector('button[type="submit"]').textContent = "Save Provider";
+  cancelProviderEdit.hidden = false;
+  providerForm.elements.namedItem("name").focus();
+}
+
+function providerAction(label, provider, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = label;
+  button.setAttribute("aria-label", `${label} ${provider.name}`);
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function renderProviders(providers) {
+  providerList.replaceChildren();
+  if (providers.length === 0) {
+    providerList.append(makeEmptyState("No model Providers configured."));
+    return;
+  }
+  for (const provider of providers) {
+    const card = document.createElement("article");
+    card.className = "capability-card provider-card";
+
+    const heading = document.createElement("div");
+    heading.className = "provider-card-heading";
+    const name = document.createElement("code");
+    name.className = "capability-name";
+    name.textContent = provider.name;
+    const selection = document.createElement("span");
+    selection.className = "skill-state";
+    selection.textContent = provider.selected ? "Selected" : "Not selected";
+    heading.append(name, selection);
+
+    const facts = document.createElement("p");
+    facts.className = "capability-description";
+    const model = document.createElement("span");
+    model.textContent = provider.model;
+    const endpoint = document.createElement("span");
+    endpoint.textContent = ` · ${provider.base_url} · `;
+    const credential = document.createElement("span");
+    credential.textContent = provider.api_key || "No credential";
+    facts.append(model, endpoint, credential);
+
+    const state = document.createElement("div");
+    state.className = "provider-state";
+    const enablement = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = provider.enabled;
+    checkbox.setAttribute("aria-label", `Enable ${provider.name} Provider`);
+    const stateText = document.createElement("span");
+    stateText.textContent = provider.enabled ? "Enabled" : "Disabled";
+    enablement.append(checkbox, stateText);
+    state.append(enablement);
+
+    checkbox.addEventListener("change", async () => {
+      checkbox.disabled = true;
+      try {
+        const response = await fetch(
+          `/api/settings/providers/${encodeURIComponent(provider.id)}/enabled`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: checkbox.checked }),
+          },
+        );
+        if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+        settingsStatus.textContent = `${provider.name} is ${
+          checkbox.checked ? "enabled" : "disabled"
+        }.`;
+        await loadProviders();
+      } catch (error) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.disabled = false;
+        settingsStatus.textContent = `${provider.name} could not be updated.`;
+      }
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "provider-actions";
+    actions.append(
+      providerAction("Edit", provider, () => editProvider(provider)),
+      providerAction("Validate", provider, async () => {
+        settingsStatus.textContent = `Validating ${provider.name}.`;
+        try {
+          const response = await fetch(
+            `/api/settings/providers/${encodeURIComponent(provider.id)}/validate`,
+            { method: "POST" },
+          );
+          if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+          settingsStatus.textContent = `${provider.name} validated.`;
+        } catch (error) {
+          settingsStatus.textContent = `${provider.name} could not be validated.`;
+        }
+      }),
+    );
+    if (!provider.selected) {
+      actions.append(
+        providerAction("Select", provider, async () => {
+          try {
+            const response = await fetch(
+              `/api/settings/providers/${encodeURIComponent(provider.id)}/select`,
+              { method: "POST" },
+            );
+            if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+            settingsStatus.textContent = `${provider.name} selected.`;
+            await loadProviders();
+          } catch (error) {
+            settingsStatus.textContent = `${provider.name} could not be selected.`;
+          }
+        }),
+      );
+    }
+    card.append(heading, facts, state, actions);
+    providerList.append(card);
+  }
+}
+
+async function loadProviders() {
+  const response = await fetch("/api/settings/providers");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderProviders(payload.providers);
+}
+
+providerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const providerId = providerForm.elements.namedItem("provider_id").value;
+  const submitButton = providerForm.querySelector('button[type="submit"]');
+  const body = Object.fromEntries(new FormData(providerForm).entries());
+  delete body.provider_id;
+  body.timeout_seconds = Number(body.timeout_seconds);
+  body.max_retries = Number(body.max_retries);
+  if (!providerId && !body.api_key) {
+    settingsStatus.textContent = "An API key is required for a new Provider.";
+    return;
+  }
+  submitButton.disabled = true;
+  try {
+    const response = await fetch(
+      providerId
+        ? `/api/settings/providers/${encodeURIComponent(providerId)}`
+        : "/api/settings/providers",
+      {
+        method: providerId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const savedName = body.name;
+    resetProviderForm();
+    settingsStatus.textContent = `${savedName} saved.`;
+    await loadProviders();
+  } catch (error) {
+    settingsStatus.textContent = "Provider configuration could not be saved.";
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+cancelProviderEdit.addEventListener("click", resetProviderForm);
+
 personaForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = personaForm.querySelector('button[type="submit"]');
@@ -646,6 +829,7 @@ async function loadSettings() {
   try {
     await Promise.all([
       loadPersona(),
+      loadProviders(),
       loadConversations(),
       loadCapabilities(),
       loadConfirmations(),

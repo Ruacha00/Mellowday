@@ -8,7 +8,7 @@ from typing import Literal, assert_never
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from mellowday.agent_core import (
     AgentCore,
@@ -18,15 +18,25 @@ from mellowday.agent_core import (
     ConfirmationError,
     ConfirmationErrorCode,
     ConversationHistoryError,
-    FakeProvider,
     ModelProvider,
+    ProviderFailure,
     RuntimeEventLog,
     Skill,
     SQLiteConversationHistory,
     Tool,
     TurnRequest,
 )
+from mellowday.agent_core.openai_compatible import (
+    HttpxProviderTransport,
+    ProviderTransport,
+)
 from mellowday.personal_assistant import Persona, SQLitePersonaStore
+
+from .provider_settings import (
+    SelectedProvider,
+    SQLiteProviderConfigurationStore,
+    build_openai_compatible_provider,
+)
 
 
 _STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
@@ -51,6 +61,15 @@ class PersonaBody(BaseModel):
     relationship_framing: str
     conversational_boundaries: str
     proactive_chat_style: str
+
+
+class ProviderConfigurationBody(BaseModel):
+    name: str = Field(min_length=1)
+    base_url: str = Field(pattern=r"^https?://")
+    model: str = Field(min_length=1)
+    api_key: str
+    timeout_seconds: float = Field(default=60, gt=0)
+    max_retries: int = Field(default=2, ge=0, le=10)
 
 
 class ConfirmationChatContentBody(BaseModel):
@@ -109,10 +128,10 @@ def create_app(
     conversation_database_path: str | Path | None = None,
     history_message_limit: int = 40,
     history_character_limit: int = 12_000,
+    provider_transport: ProviderTransport | None = None,
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
-    selected_provider = provider if provider is not None else FakeProvider()
     database_path = (
         Path(conversation_database_path)
         if conversation_database_path is not None
@@ -123,6 +142,15 @@ def create_app(
         database_path, events=runtime_events
     )
     persona_store = SQLitePersonaStore(database_path)
+    provider_store = SQLiteProviderConfigurationStore(database_path)
+    configured_provider_transport = provider_transport or HttpxProviderTransport()
+    if provider is None:
+        selected_provider: ModelProvider = SelectedProvider(
+            provider_store,
+            configured_provider_transport,
+        )
+    else:
+        selected_provider = provider
     agent_core = AgentCore(
         provider=selected_provider,
         tools=tools,
@@ -271,6 +299,70 @@ def create_app(
             "removed_messages": removed_messages,
             "event": asdict(event),
         }
+
+    @app.get("/api/settings/providers")
+    async def list_provider_configurations() -> dict[str, object]:
+        return {
+            "providers": [
+                configuration.settings_payload()
+                for configuration in provider_store.list()
+            ]
+        }
+
+    @app.post("/api/settings/providers", status_code=201)
+    async def create_provider_configuration(
+        body: ProviderConfigurationBody,
+    ) -> dict[str, object]:
+        configuration = provider_store.create(**body.model_dump())
+        return {"provider": configuration.settings_payload()}
+
+    @app.put("/api/settings/providers/{provider_id}")
+    async def update_provider_configuration(
+        provider_id: str, body: ProviderConfigurationBody
+    ) -> dict[str, object]:
+        configuration = provider_store.update(provider_id, **body.model_dump())
+        if configuration is None:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        return {"provider": configuration.settings_payload()}
+
+    @app.post("/api/settings/providers/{provider_id}/select")
+    async def select_provider_configuration(provider_id: str) -> dict[str, object]:
+        configuration = provider_store.select(provider_id)
+        if configuration is None:
+            raise HTTPException(
+                status_code=409, detail="Provider is unavailable for selection"
+            )
+        return {"provider": configuration.settings_payload()}
+
+    @app.post("/api/settings/providers/{provider_id}/validate")
+    async def validate_provider_configuration(provider_id: str) -> dict[str, object]:
+        configuration = provider_store.get(provider_id)
+        if configuration is None:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        adapter = build_openai_compatible_provider(
+            configuration, configured_provider_transport
+        )
+        try:
+            await adapter.validate()
+        except ProviderFailure as error:
+            return {
+                "valid": False,
+                "failure": {
+                    "code": error.code,
+                    "retryable": error.retryable,
+                    "attempts": error.attempts,
+                },
+            }
+        return {"valid": True}
+
+    @app.put("/api/settings/providers/{provider_id}/enabled")
+    async def set_provider_enabled(
+        provider_id: str, body: SkillEnablementBody
+    ) -> dict[str, object]:
+        configuration = provider_store.set_enabled(provider_id, body.enabled)
+        if configuration is None:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        return {"provider": configuration.settings_payload()}
 
     @app.get("/api/settings/persona")
     async def get_persona() -> dict[str, object]:

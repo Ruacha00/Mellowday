@@ -18,11 +18,13 @@ StopReason = Literal[
     "confirmation_rejected",
     "step_limit",
     "tool_call_limit",
+    "provider_error",
 ]
 EventType = Literal[
     "turn_started",
     "provider_started",
     "provider_completed",
+    "provider_failed",
     "action_decided",
     "confirmation_pending",
     "confirmation_accepted",

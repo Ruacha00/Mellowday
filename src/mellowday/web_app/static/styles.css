@@ -547,7 +547,8 @@ button:disabled {
 }
 
 .history-settings,
-.persona-settings {
+.persona-settings,
+.provider-settings {
   margin-bottom: 30px;
   padding-bottom: 30px;
   border-bottom: 1px solid var(--line);
@@ -557,6 +558,87 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 22px;
+}
+
+.provider-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 22px;
+}
+
+.provider-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.provider-form input {
+  min-height: 48px;
+  padding: 12px 14px;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.66);
+  font: 0.95rem/1.45 "Iowan Old Style", "Palatino Linotype", serif;
+}
+
+.provider-form small {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.provider-form-actions,
+.provider-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.provider-form-actions {
+  grid-column: 1 / -1;
+}
+
+.provider-form-actions button,
+.provider-actions button {
+  min-height: 40px;
+}
+
+.provider-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.provider-card {
+  display: grid;
+  gap: 12px;
+}
+
+.provider-card-heading,
+.provider-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.provider-state {
+  justify-content: flex-start;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.provider-state label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .persona-form label {
@@ -967,6 +1049,11 @@ button:disabled {
   }
 
   .persona-form {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-form,
+  .provider-list {
     grid-template-columns: 1fr;
   }
 

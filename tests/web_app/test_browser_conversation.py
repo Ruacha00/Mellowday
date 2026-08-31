@@ -20,6 +20,7 @@ from mellowday.agent_core import (
     ToolOutcome,
     UndoMetadata,
 )
+from mellowday.agent_core.openai_compatible import ProviderTransportResponse
 from mellowday.web_app import create_app
 
 
@@ -175,6 +176,58 @@ def test_user_can_view_and_edit_the_single_persona_from_settings(
 
         for label, value in values.items():
             expect(page.get_by_label(label, exact=True)).to_have_value(value)
+        browser.close()
+
+
+def test_user_can_manage_model_providers_from_settings(tmp_path: Path) -> None:
+    class ValidTransport:
+        async def request(
+            self,
+            _method: str,
+            _url: str,
+            *,
+            headers: dict[str, str],
+            json: dict[str, object] | None,
+            timeout: float,
+        ) -> ProviderTransportResponse:
+            return ProviderTransportResponse(status_code=200, payload={"data": []})
+
+    app = create_app(
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+        provider_transport=ValidTransport(),
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        page.get_by_role("button", name="Settings").click()
+
+        page.get_by_label("Provider name", exact=True).fill("Local model")
+        page.get_by_label("Base URL", exact=True).fill("http://localhost:9000/v1")
+        page.get_by_label("Model", exact=True).fill("first-model")
+        page.get_by_label("API key", exact=True).fill("local-secret")
+        page.get_by_role("button", name="Add Provider").click()
+
+        expect(page.get_by_text("••••cret", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Select Local model").click()
+        expect(page.get_by_text("Selected", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Validate Local model").click()
+        expect(page.locator("#settings-status")).to_have_text(
+            "Local model validated."
+        )
+
+        page.get_by_role("button", name="Edit Local model").click()
+        page.get_by_label("Model", exact=True).fill("edited-model")
+        page.get_by_role("button", name="Save Provider").click()
+        expect(page.get_by_text("edited-model", exact=True)).to_be_visible()
+
+        enablement = page.get_by_role(
+            "checkbox", name="Enable Local model Provider"
+        )
+        enablement.uncheck()
+        expect(page.get_by_text("Disabled", exact=True)).to_be_visible()
         browser.close()
 
 

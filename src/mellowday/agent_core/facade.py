@@ -31,7 +31,7 @@ from .extensions import (
     validate_tool_arguments,
 )
 from .history import ConversationHistory
-from .provider import ModelProvider, ProviderRequest
+from .provider import ModelProvider, ProviderFailure, ProviderRequest
 from .types import (
     ChatContent,
     EventType,
@@ -321,20 +321,44 @@ class AgentCore:
                 return result
             provider_steps += 1
             emit("provider_started", provider=self._provider.name)
-            reply = await self._provider.complete(
-                ProviderRequest(
-                    messages=provider_messages,
-                    system_instructions=self._system_instructions(),
-                    tools=self.list_tools(),
-                    tool_results=tuple(tool_results),
-                    skills=tuple(
-                        metadata
-                        for metadata in self.list_skills()
-                        if metadata.enabled
-                    ),
-                    loaded_skills=tuple(loaded_skills.values()),
+            try:
+                reply = await self._provider.complete(
+                    ProviderRequest(
+                        messages=provider_messages,
+                        system_instructions=self._system_instructions(),
+                        tools=self.list_tools(),
+                        tool_results=tuple(tool_results),
+                        skills=tuple(
+                            metadata
+                            for metadata in self.list_skills()
+                            if metadata.enabled
+                        ),
+                        loaded_skills=tuple(loaded_skills.values()),
+                    )
                 )
-            )
+            except ProviderFailure as error:
+                emit(
+                    "provider_failed",
+                    provider=self._provider.name,
+                    code=error.code,
+                    retryable=error.retryable,
+                    attempts=error.attempts,
+                )
+                chat_content = ChatContent(
+                    role="assistant",
+                    content=(
+                        "I couldn't reach the configured model Provider, so I can't "
+                        "answer that reliably right now. Please check Settings and "
+                        "try again."
+                    ),
+                )
+                emit("turn_completed", stop_reason="provider_error")
+                self._record_history(conversation_id, (*messages, chat_content))
+                return TurnResult(
+                    chat_content=chat_content,
+                    stop_reason="provider_error",
+                    events=tuple(events),
+                )
             emit("provider_completed", provider=self._provider.name)
             last_reply_content = reply.content.strip()
             if not reply.tool_calls and not reply.selected_skills:

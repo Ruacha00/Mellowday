@@ -93,6 +93,61 @@
 
         <p id="settings-status" class="settings-status" role="status"></p>
 
+        <section class="provider-settings" aria-labelledby="provider-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Replaceable inference</p>
+              <h3 id="provider-settings-title">Model Providers</h3>
+              <p class="capability-description">
+                Configure OpenAI-compatible endpoints. Credentials stay local and
+                are masked in Settings.
+              </p>
+            </div>
+            <span class="local-badge">Local credentials</span>
+          </header>
+
+          <form id="provider-form" class="provider-form">
+            <input name="provider_id" type="hidden" />
+            <label>
+              <span>Provider name</span>
+              <input name="name" autocomplete="off" required />
+            </label>
+            <label>
+              <span>Base URL</span>
+              <input name="base_url" type="url" autocomplete="off" required />
+            </label>
+            <label>
+              <span>Model</span>
+              <input name="model" autocomplete="off" required />
+            </label>
+            <label>
+              <span>API key</span>
+              <input
+                name="api_key"
+                type="password"
+                autocomplete="new-password"
+                aria-label="API key"
+              />
+              <small>Leave blank while editing to keep the stored credential.</small>
+            </label>
+            <label>
+              <span>Timeout (seconds)</span>
+              <input name="timeout_seconds" type="number" min="1" value="60" required />
+            </label>
+            <label>
+              <span>Maximum retries</span>
+              <input name="max_retries" type="number" min="0" max="10" value="2" required />
+            </label>
+            <div class="provider-form-actions">
+              <button type="submit">Add Provider</button>
+              <button id="cancel-provider-edit" class="text-button" type="button" hidden>
+                Cancel edit
+              </button>
+            </div>
+          </form>
+          <div id="provider-list" class="provider-list"></div>
+        </section>
+
         <section class="persona-settings" aria-labelledby="persona-settings-title">
           <header class="history-settings-heading">
             <div>
