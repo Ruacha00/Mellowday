@@ -99,34 +99,60 @@ def test_settings_manages_searchable_notes_with_consistent_audit(
     asyncio.run(exercise())
 
 
-def test_chat_creates_clear_notes_and_clarifies_ambiguous_requests(
+def test_chat_runs_the_complete_note_tool_lifecycle_and_clarifies_ambiguity(
     tmp_path: Path,
 ) -> None:
     class NoteProvider:
         name = "note-script"
 
+        def __init__(self) -> None:
+            self.note_id = ""
+            self.results: list[str] = []
+
         async def complete(self, request: ProviderRequest) -> ProviderReply:
             if request.tool_results:
-                if request.tool_results[-1].error == "ambiguous_intent":
+                result = request.tool_results[-1]
+                if result.error == "ambiguous_intent":
                     return ProviderReply(content="What would you like me to save?")
-                return ProviderReply(content="I saved that as a Note.")
+                self.results.append(result.name)
+                if result.name == "note_create":
+                    self.note_id = result.result["note"]["id"]
+                return ProviderReply(content=f"Finished {result.name}.")
             command = request.messages[-1].content
+            calls = {
+                "ambiguous": ToolCall(
+                    "ambiguous",
+                    "note_create",
+                    {"title": "Door code", "content": "The code is 2468."},
+                    intent_clarity="ambiguous",
+                ),
+                "create": ToolCall(
+                    "create",
+                    "note_create",
+                    {"title": "Door code", "content": "The code is 2468."},
+                ),
+                "retrieve": ToolCall(
+                    "retrieve", "note_get", {"note_id": self.note_id}
+                ),
+                "update": ToolCall(
+                    "update",
+                    "note_update",
+                    {"note_id": self.note_id, "content": "The code is 8642."},
+                ),
+                "delete": ToolCall(
+                    "delete", "note_delete", {"note_id": self.note_id}
+                ),
+            }
             return ProviderReply(
-                tool_calls=(
-                    ToolCall(
-                        command,
-                        "note_create",
-                        {"title": "Door code", "content": "The code is 2468."},
-                        intent_clarity=(
-                            "ambiguous" if command == "Save a note." else "clear"
-                        ),
-                    ),
-                )
+                content="Please confirm deletion." if command == "delete" else "",
+                tool_calls=(calls[command],),
             )
+
+    provider = NoteProvider()
 
     async def exercise() -> None:
         app = create_app(
-            provider=NoteProvider(),
+            provider=provider,
             conversation_database_path=tmp_path / "mellowday.sqlite3",
             audit_path=None,
         )
@@ -135,14 +161,25 @@ def test_chat_creates_clear_notes_and_clarifies_ambiguous_requests(
         ) as client:
             ambiguous = await client.post(
                 "/api/chat",
-                json={"conversation_id": "main", "content": "Save a note."},
+                json={"conversation_id": "main", "content": "ambiguous"},
             )
             before = await client.get("/api/settings/notes")
-            clear = await client.post(
-                "/api/chat",
+            for command in ("create", "retrieve", "update"):
+                response = await client.post(
+                    "/api/chat",
+                    json={"conversation_id": "main", "content": command},
+                )
+                assert response.json()["stop_reason"] == "final"
+            updated = await client.get(f"/api/settings/notes/{provider.note_id}")
+            pending = await client.post(
+                "/api/chat", json={"conversation_id": "main", "content": "delete"}
+            )
+            confirmation = pending.json()["confirmation"]
+            deleted = await client.post(
+                f"/api/settings/confirmations/{confirmation['id']}/decision",
                 json={
-                    "conversation_id": "main",
-                    "content": "Save the door code as a note.",
+                    "decision": "accept",
+                    "binding": confirmation["binding"],
                 },
             )
             after = await client.get("/api/settings/notes")
@@ -153,18 +190,31 @@ def test_chat_creates_clear_notes_and_clarifies_ambiguous_requests(
             "What would you like me to save?"
         )
         assert before.json() == {"notes": []}
-        assert clear.json()["stop_reason"] == "final"
-        assert clear.json()["chat_content"]["content"] == "I saved that as a Note."
-        assert len(after.json()["notes"]) == 1
+        assert updated.json()["note"]["content"] == "The code is 8642."
+        assert pending.json()["stop_reason"] == "confirmation_pending"
+        assert deleted.json()["turn"]["stop_reason"] == "confirmation_accepted"
+        assert after.json() == {"notes": []}
         note_events = [
             event
             for event in audit.json()["events"]
             if event["type"] == "application_action_completed"
             and event["details"]["resource_type"] == "note"
         ]
-        assert note_events[0]["conversation_id"] == "main"
+        assert [event["details"]["action"] for event in note_events] == [
+            "created",
+            "updated",
+            "deleted",
+        ]
+        assert all(event["conversation_id"] == "main" for event in note_events)
 
     asyncio.run(exercise())
+
+    assert provider.results == [
+        "note_create",
+        "note_get",
+        "note_update",
+        "note_delete",
+    ]
 
 
 def test_note_failures_are_truthful_in_chat_and_neutral_in_settings(
@@ -212,5 +262,82 @@ def test_note_failures_are_truthful_in_chat_and_neutral_in_settings(
             "code": "invalid_note",
             "message": "content must not be empty",
         }
+
+    asyncio.run(exercise())
+
+
+def test_missing_note_tool_is_reported_as_a_failed_chat_action(
+    tmp_path: Path,
+) -> None:
+    class MissingNoteProvider:
+        name = "missing-note-script"
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            if request.tool_results:
+                result = request.tool_results[-1]
+                assert result.error == "executor_error"
+                assert result.detail == "Note not found: missing"
+                return ProviderReply(content="I couldn't find that Note.")
+            return ProviderReply(
+                tool_calls=(
+                    ToolCall("missing-note", "note_get", {"note_id": "missing"}),
+                )
+            )
+
+    async def exercise() -> None:
+        app = create_app(
+            provider=MissingNoteProvider(),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            chat = await client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "Read a missing Note."},
+            )
+            events = await client.get("/api/events/recent")
+
+        assert chat.json()["chat_content"]["content"] == (
+            "I couldn't find that Note."
+        )
+        failures = [
+            event
+            for event in events.json()["events"]
+            if event["type"] == "tool_execution_failed"
+        ]
+        assert failures[-1]["details"]["error"] == "executor_error"
+
+    asyncio.run(exercise())
+
+
+def test_note_audit_failure_reports_that_the_change_was_committed(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        audit_path = tmp_path / "blocked-audit"
+        app = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            audit_path=audit_path,
+        )
+        audit_path.mkdir()
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/settings/notes", json={"content": "Persist this"}
+            )
+            notes = await client.get("/api/settings/notes")
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == {
+            "code": "note_change_notification_failed",
+            "operation": "created",
+            "note_id": notes.json()["notes"][0]["id"],
+            "committed": True,
+        }
+        assert notes.json()["notes"][0]["content"] == "Persist this"
 
     asyncio.run(exercise())

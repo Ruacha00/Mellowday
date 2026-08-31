@@ -1,7 +1,13 @@
 import asyncio
 from pathlib import Path
 
-from mellowday.personal_assistant import SQLiteNoteService, build_note_tools
+import pytest
+
+from mellowday.personal_assistant import (
+    NoteNotFoundError,
+    SQLiteNoteService,
+    build_note_tools,
+)
 
 
 def test_registered_note_tools_cover_the_complete_note_lifecycle(
@@ -47,3 +53,17 @@ def test_registered_note_tools_cover_the_complete_note_lifecycle(
     assert tools["note_create"].side_effect == "reversible"
     assert tools["note_update"].side_effect == "reversible"
     assert tools["note_delete"].side_effect == "irreversible"
+
+
+def test_missing_note_is_a_tool_failure_not_a_successful_error_value(
+    tmp_path: Path,
+) -> None:
+    tools = {
+        tool.name: tool
+        for tool in build_note_tools(SQLiteNoteService(tmp_path / "mellowday.sqlite3"))
+    }
+
+    with pytest.raises(NoteNotFoundError, match="Note not found"):
+        asyncio.run(
+            tools["note_get"].executor({"note_id": "missing"}, "chat-1")
+        )

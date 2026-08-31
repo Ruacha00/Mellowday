@@ -5,7 +5,7 @@ from typing import cast
 
 from mellowday.agent_core import Tool
 
-from .notes import Note, NoteUpdates, SQLiteNoteService
+from .notes import Note, NoteNotFoundError, NoteUpdates, SQLiteNoteService
 
 
 def build_note_tools(service: SQLiteNoteService) -> tuple[Tool, ...]:
@@ -18,7 +18,8 @@ def build_note_tools(service: SQLiteNoteService) -> tuple[Tool, ...]:
         return {"note": asdict(note)}
 
     async def get(arguments: dict[str, object], _conversation_id: str) -> object:
-        return _note_result(service.get(cast(str, arguments["note_id"])))
+        note_id = cast(str, arguments["note_id"])
+        return {"note": asdict(_require_note(service.get(note_id), note_id))}
 
     async def search(arguments: dict[str, object], _conversation_id: str) -> object:
         notes = service.search(cast(str, arguments.get("query", "")))
@@ -35,15 +36,17 @@ def build_note_tools(service: SQLiteNoteService) -> tuple[Tool, ...]:
             **updates,
             conversation_id=conversation_id,
         )
-        return _note_result(note)
+        return {"note": asdict(_require_note(note, cast(str, arguments["note_id"])))}
 
     async def delete(arguments: dict[str, object], conversation_id: str) -> object:
         note = service.delete(
             cast(str, arguments["note_id"]), conversation_id=conversation_id
         )
-        if note is None:
-            return {"error": "note_not_found"}
-        return {"deleted_note": asdict(note)}
+        return {
+            "deleted_note": asdict(
+                _require_note(note, cast(str, arguments["note_id"]))
+            )
+        }
 
     note_id_schema = {
         "type": "object",
@@ -118,10 +121,10 @@ def build_note_tools(service: SQLiteNoteService) -> tuple[Tool, ...]:
     )
 
 
-def _note_result(note: Note | None) -> dict[str, object]:
+def _require_note(note: Note | None, note_id: str) -> Note:
     if note is None:
-        return {"error": "note_not_found"}
-    return {"note": asdict(note)}
+        raise NoteNotFoundError(note_id)
+    return note
 
 
 __all__ = ["build_note_tools"]

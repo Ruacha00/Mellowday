@@ -24,6 +24,14 @@ class NoteValidationError(ValueError):
     """Raised when Note input is invalid."""
 
 
+class NoteNotFoundError(LookupError):
+    """Raised by a Tool adapter when a requested Note does not exist."""
+
+    def __init__(self, note_id: str) -> None:
+        self.note_id = note_id
+        super().__init__(f"Note not found: {note_id}")
+
+
 NoteOperation = Literal["created", "updated", "deleted"]
 
 
@@ -33,6 +41,18 @@ class NoteChange:
     note_id: str
     occurred_at: float
     conversation_id: str | None
+
+
+class NoteChangeNotificationError(RuntimeError):
+    """Report a committed Note change whose listener could not record it."""
+
+    def __init__(self, operation: NoteOperation, note_id: str) -> None:
+        self.operation = operation
+        self.note_id = note_id
+        self.committed = True
+        super().__init__(
+            f"Note {operation} but its change notification could not be recorded"
+        )
 
 
 class NoteUpdates(TypedDict, total=False):
@@ -122,6 +142,8 @@ class SQLiteNoteService:
         content: str | object = _UNSET,
         conversation_id: str | None = None,
     ) -> Note | None:
+        if title is _UNSET and content is _UNSET:
+            raise NoteValidationError("at least one Note field must be updated")
         current = self.get(note_id)
         if current is None:
             return None
@@ -137,6 +159,11 @@ class SQLiteNoteService:
             normalized_content = _required_text("content", content)
         else:
             raise NoteValidationError("content must be text")
+        if (
+            normalized_title == current.title
+            and normalized_content == current.content
+        ):
+            return current
         now = self._clock()
         with self._connect() as connection:
             connection.execute(
@@ -168,9 +195,12 @@ class SQLiteNoteService:
         conversation_id: str | None,
     ) -> None:
         if self._change_listener is not None:
-            self._change_listener(
-                NoteChange(operation, note_id, occurred_at, conversation_id)
-            )
+            try:
+                self._change_listener(
+                    NoteChange(operation, note_id, occurred_at, conversation_id)
+                )
+            except Exception as error:
+                raise NoteChangeNotificationError(operation, note_id) from error
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._path)
@@ -220,6 +250,8 @@ def _note_from_row(row: sqlite3.Row) -> Note:
 __all__ = [
     "Note",
     "NoteChange",
+    "NoteChangeNotificationError",
+    "NoteNotFoundError",
     "NoteOperation",
     "NoteUpdates",
     "NoteValidationError",

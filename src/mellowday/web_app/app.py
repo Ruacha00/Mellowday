@@ -38,6 +38,7 @@ from mellowday.agent_core.openai_compatible import (
 )
 from mellowday.personal_assistant import (
     NoteChange,
+    NoteChangeNotificationError,
     NoteUpdates,
     NoteValidationError,
     Persona,
@@ -393,6 +394,22 @@ def create_app(
             status_code=422,
             content={
                 "detail": {"code": "invalid_note", "message": str(error)}
+            },
+        )
+
+    @app.exception_handler(NoteChangeNotificationError)
+    async def note_change_notification_failure(
+        _request: Request, error: NoteChangeNotificationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": {
+                    "code": "note_change_notification_failed",
+                    "operation": error.operation,
+                    "note_id": error.note_id,
+                    "committed": error.committed,
+                }
             },
         )
 
@@ -821,8 +838,10 @@ def create_app(
         }
 
     @app.get("/api/settings/notes")
-    async def list_notes(q: str = "") -> dict[str, object]:
-        return {"notes": [asdict(note) for note in note_service.search(q)]}
+    async def list_notes(
+        query: str = Query(default="", alias="q"),
+    ) -> dict[str, object]:
+        return {"notes": [asdict(note) for note in note_service.search(query)]}
 
     @app.post("/api/settings/notes", status_code=201)
     async def create_note(body: NoteCreateBody) -> dict[str, object]:

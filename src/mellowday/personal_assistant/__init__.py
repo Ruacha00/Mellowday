@@ -5,6 +5,8 @@ from .note_tools import build_note_tools
 from .notes import (
     Note,
     NoteChange,
+    NoteChangeNotificationError,
+    NoteNotFoundError,
     NoteOperation,
     NoteUpdates,
     NoteValidationError,
@@ -36,6 +38,8 @@ __all__ = [
     "Persona",
     "Note",
     "NoteChange",
+    "NoteChangeNotificationError",
+    "NoteNotFoundError",
     "NoteOperation",
     "NoteUpdates",
     "NoteValidationError",
