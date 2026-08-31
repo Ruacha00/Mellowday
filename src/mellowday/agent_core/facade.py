@@ -4,7 +4,7 @@ import time
 from collections.abc import Callable
 
 from .provider import ModelProvider
-from .types import ChatContent, RuntimeEvent, TurnRequest, TurnResult
+from .types import ChatContent, EventType, RuntimeEvent, TurnRequest, TurnResult
 
 
 class AgentCore:
@@ -25,7 +25,7 @@ class AgentCore:
         )
         events: list[RuntimeEvent] = []
 
-        def emit(event_type: str, **details: object) -> None:
+        def emit(event_type: EventType, **details: object) -> None:
             events.append(
                 RuntimeEvent(
                     sequence=len(events) + 1,
@@ -48,4 +48,3 @@ class AgentCore:
             stop_reason="final",
             events=tuple(events),
         )
-

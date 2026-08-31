@@ -6,6 +6,12 @@ from typing import Literal
 
 ChatRole = Literal["user", "assistant"]
 StopReason = Literal["final"]
+EventType = Literal[
+    "turn_started",
+    "provider_started",
+    "provider_completed",
+    "turn_completed",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +29,7 @@ class TurnRequest:
 @dataclass(frozen=True, slots=True)
 class RuntimeEvent:
     sequence: int
-    type: str
+    type: EventType
     occurred_at: float
     conversation_id: str
     details: dict[str, object] = field(default_factory=dict)
@@ -34,4 +40,3 @@ class TurnResult:
     chat_content: ChatContent
     stop_reason: StopReason
     events: tuple[RuntimeEvent, ...]
-

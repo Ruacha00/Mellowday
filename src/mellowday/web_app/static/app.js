@@ -51,11 +51,9 @@ form.addEventListener("submit", async (event) => {
     input.focus();
   }
 });
-
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     form.requestSubmit();
   }
 });
-

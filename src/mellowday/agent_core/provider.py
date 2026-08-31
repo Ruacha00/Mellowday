@@ -33,4 +33,3 @@ class FakeProvider:
             "",
         )
         return ProviderReply(content=f"I heard: {latest_user}")
-

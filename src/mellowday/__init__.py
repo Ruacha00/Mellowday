@@ -1,2 +1,1 @@
 """Mellowday application package."""
-
