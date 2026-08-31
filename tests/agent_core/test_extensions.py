@@ -1,6 +1,8 @@
 import asyncio
 from collections.abc import Sequence
 
+import pytest
+
 from mellowday.agent_core import (
     AgentCore,
     ChatContent,
@@ -161,6 +163,86 @@ def test_invalid_tool_arguments_return_a_normalized_failure() -> None:
     assert "tool_execution_failed" in [event.type for event in result.events]
 
 
+def test_tool_schema_length_and_range_constraints_are_enforced() -> None:
+    executions: list[dict[str, object]] = []
+
+    async def record(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        executions.append(arguments)
+        return {"conversation_id": conversation_id}
+
+    tool = Tool(
+        name="constrained",
+        description="Validate length and range constraints.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "label": {"type": "string", "minLength": 3, "maxLength": 5},
+                "count": {"type": "integer", "minimum": 1, "maximum": 10},
+            },
+            "required": ["label", "count"],
+            "additionalProperties": False,
+        },
+        executor=record,
+    )
+    provider = ScriptedProvider(
+        (
+            ProviderReply(
+                tool_calls=(
+                    ToolCall("short", "constrained", {"label": "a", "count": 2}),
+                    ToolCall("long", "constrained", {"label": "abcdef", "count": 2}),
+                    ToolCall("below", "constrained", {"label": "okay", "count": 0}),
+                    ToolCall("above", "constrained", {"label": "okay", "count": 11}),
+                )
+            ),
+            ProviderReply(content="The values were invalid."),
+        )
+    )
+    core = AgentCore(provider=provider, tools=(tool,))
+
+    asyncio.run(
+        core.run_turn(
+            TurnRequest(
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Validate values."),),
+            )
+        )
+    )
+
+    assert executions == []
+    assert [result.detail for result in provider.requests[1].tool_results] == [
+        "arguments.label is shorter than minLength 3",
+        "arguments.label is longer than maxLength 5",
+        "arguments.count is below minimum 1",
+        "arguments.count is above maximum 10",
+    ]
+
+
+def test_tool_rejects_unknown_side_effect_and_risk_classifications() -> None:
+    async def execute(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        return {"conversation_id": conversation_id, **arguments}
+
+    with pytest.raises(ValueError, match="side-effect classification"):
+        Tool(
+            name="bad_side_effect",
+            description="Invalid metadata.",
+            input_schema={},
+            executor=execute,
+            side_effect="unknown",  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="risk classification"):
+        Tool(
+            name="bad_risk",
+            description="Invalid metadata.",
+            input_schema={},
+            executor=execute,
+            risk="unknown",  # type: ignore[arg-type]
+        )
+
+
 def test_tool_executor_errors_return_a_normalized_failure() -> None:
     async def fail(
         arguments: dict[str, object], conversation_id: str
@@ -286,3 +368,101 @@ def test_explicitly_requested_skill_loads_before_the_provider_call() -> None:
         "provider_completed",
         "turn_completed",
     ]
+
+
+def test_repeated_extension_requests_stop_without_reexecuting_a_tool() -> None:
+    executions: list[str] = []
+
+    async def execute(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        executions.append(conversation_id)
+        return arguments
+
+    class RepeatingProvider:
+        name = "repeating"
+
+        def __init__(self) -> None:
+            self.requests: list[ProviderRequest] = []
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            self.requests.append(request)
+            return ProviderReply(
+                tool_calls=(ToolCall("same-call", "repeatable", {}),),
+                selected_skills=("missing",),
+            )
+
+    provider = RepeatingProvider()
+    core = AgentCore(
+        provider=provider,
+        tools=(
+            Tool(
+                name="repeatable",
+                description="Synthetic repeated Tool.",
+                input_schema={},
+                executor=execute,
+            ),
+        ),
+        max_provider_steps=2,
+    )
+
+    result = asyncio.run(
+        core.run_turn(
+            TurnRequest(
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Repeat."),),
+            )
+        )
+    )
+
+    assert result.stop_reason == "step_limit"
+    assert len(provider.requests) == 2
+    assert executions == ["conversation-1"]
+    assert result.events[-1].type == "turn_limit_reached"
+    assert result.events[-1].details == {"limit": "provider_steps"}
+
+
+def test_tool_call_limit_stops_before_executing_the_batch() -> None:
+    executions: list[str] = []
+
+    async def execute(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        executions.append(conversation_id)
+        return arguments
+
+    provider = ScriptedProvider(
+        (
+            ProviderReply(
+                tool_calls=(
+                    ToolCall("call-1", "limited", {}),
+                    ToolCall("call-2", "limited", {}),
+                )
+            ),
+        )
+    )
+    core = AgentCore(
+        provider=provider,
+        tools=(
+            Tool(
+                name="limited",
+                description="Synthetic limited Tool.",
+                input_schema={},
+                executor=execute,
+            ),
+        ),
+        max_tool_calls=1,
+    )
+
+    result = asyncio.run(
+        core.run_turn(
+            TurnRequest(
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Run twice."),),
+            )
+        )
+    )
+
+    assert result.stop_reason == "tool_call_limit"
+    assert executions == []
+    assert result.events[-1].details == {"limit": "tool_calls"}

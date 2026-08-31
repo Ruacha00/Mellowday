@@ -180,8 +180,8 @@ function renderSkills(skills) {
         );
         if (!response.ok) throw new Error(`Request failed with ${response.status}`);
         const updated = await response.json();
-        checkbox.checked = updated.enabled;
-        state.textContent = updated.enabled ? "Enabled" : "Disabled";
+        checkbox.checked = updated.skill.enabled;
+        state.textContent = updated.skill.enabled ? "Enabled" : "Disabled";
         settingsStatus.textContent = `${skill.name} is ${state.textContent.toLowerCase()}.`;
       } catch (error) {
         checkbox.checked = !intended;

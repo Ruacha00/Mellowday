@@ -17,7 +17,14 @@ from .extensions import (
     validate_tool_arguments,
 )
 from .provider import ModelProvider, ProviderRequest
-from .types import ChatContent, EventType, RuntimeEvent, TurnRequest, TurnResult
+from .types import (
+    ChatContent,
+    EventType,
+    RuntimeEvent,
+    StopReason,
+    TurnRequest,
+    TurnResult,
+)
 
 
 class AgentCore:
@@ -28,10 +35,19 @@ class AgentCore:
         tools: Iterable[Tool] = (),
         skills: Iterable[Skill] = (),
         skill_state_path: str | Path | None = None,
+        max_provider_steps: int = 8,
+        max_tool_calls: int = 16,
         clock: Callable[[], float] = time.time,
     ) -> None:
+        if max_provider_steps < 1:
+            raise ValueError("max_provider_steps must be at least 1")
+        if max_tool_calls < 0:
+            raise ValueError("max_tool_calls must not be negative")
         self._provider = provider
         self._clock = clock
+        self._max_provider_steps = max_provider_steps
+        self._max_tool_calls = max_tool_calls
+        self._event_sequence = 0
         self._tools: dict[str, Tool] = {}
         for tool in tools:
             if tool.name in self._tools:
@@ -64,7 +80,9 @@ class AgentCore:
             for name, skill in self._skills.items()
         )
 
-    def set_skill_enabled(self, name: str, enabled: bool) -> SkillMetadata | None:
+    def set_skill_enabled(
+        self, name: str, enabled: bool
+    ) -> tuple[SkillMetadata, RuntimeEvent] | None:
         """Update and locally persist one registered Skill's enablement."""
 
         skill = self._skills.get(name)
@@ -72,7 +90,14 @@ class AgentCore:
             return None
         self._skill_enabled[name] = enabled
         self._write_skill_state()
-        return skill.metadata(enabled=enabled)
+        metadata = skill.metadata(enabled=enabled)
+        event = self._runtime_event(
+            "skill_enablement_changed",
+            conversation_id=None,
+            skill=name,
+            enabled=enabled,
+        )
+        return metadata, event
 
     async def run_turn(self, request: TurnRequest) -> TurnResult:
         conversation_id = request.conversation_id.strip()
@@ -84,21 +109,32 @@ class AgentCore:
 
         def emit(event_type: EventType, **details: object) -> None:
             events.append(
-                RuntimeEvent(
-                    sequence=len(events) + 1,
-                    type=event_type,
-                    occurred_at=self._clock(),
+                self._runtime_event(
+                    event_type,
                     conversation_id=conversation_id,
-                    details=details,
+                    **details,
                 )
             )
 
         emit("turn_started", message_count=len(messages))
         tool_results: list[ToolExecutionResult] = []
         loaded_skills: dict[str, LoadedSkill] = {}
+        handled_call_ids: set[str] = set()
+        provider_steps = 0
+        tool_calls = 0
+        last_reply_content = ""
         for skill_name in request.requested_skills:
             self._load_skill(skill_name, loaded_skills, emit)
         while True:
+            if provider_steps >= self._max_provider_steps:
+                return self._limit_result(
+                    events=events,
+                    emit=emit,
+                    stop_reason="step_limit",
+                    limit="provider_steps",
+                    reply_content=last_reply_content,
+                )
+            provider_steps += 1
             emit("provider_started", provider=self._provider.name)
             reply = await self._provider.complete(
                 ProviderRequest(
@@ -114,11 +150,30 @@ class AgentCore:
                 )
             )
             emit("provider_completed", provider=self._provider.name)
+            last_reply_content = reply.content.strip()
             if not reply.tool_calls and not reply.selected_skills:
                 break
+            if tool_calls + len(reply.tool_calls) > self._max_tool_calls:
+                return self._limit_result(
+                    events=events,
+                    emit=emit,
+                    stop_reason="tool_call_limit",
+                    limit="tool_calls",
+                    reply_content=last_reply_content,
+                )
+            tool_calls += len(reply.tool_calls)
             for skill_name in reply.selected_skills:
                 self._load_skill(skill_name, loaded_skills, emit)
             for call in reply.tool_calls:
+                if call.id in handled_call_ids:
+                    emit(
+                        "tool_execution_failed",
+                        tool=call.name,
+                        call_id=call.id,
+                        error="duplicate_call",
+                    )
+                    continue
+                handled_call_ids.add(call.id)
                 tool_results.append(
                     await self._execute_tool(call, conversation_id, emit)
                 )
@@ -128,6 +183,39 @@ class AgentCore:
         return TurnResult(
             chat_content=chat_content,
             stop_reason="final",
+            events=tuple(events),
+        )
+
+    def _runtime_event(
+        self,
+        event_type: EventType,
+        *,
+        conversation_id: str | None,
+        **details: object,
+    ) -> RuntimeEvent:
+        self._event_sequence += 1
+        return RuntimeEvent(
+            sequence=self._event_sequence,
+            type=event_type,
+            occurred_at=self._clock(),
+            conversation_id=conversation_id,
+            details=details,
+        )
+
+    @staticmethod
+    def _limit_result(
+        *,
+        events: list[RuntimeEvent],
+        emit: Callable[..., None],
+        stop_reason: StopReason,
+        limit: str,
+        reply_content: str,
+    ) -> TurnResult:
+        emit("turn_limit_reached", limit=limit)
+        content = reply_content or "The turn stopped after reaching its extension limit."
+        return TurnResult(
+            chat_content=ChatContent(role="assistant", content=content),
+            stop_reason=stop_reason,
             events=tuple(events),
         )
 

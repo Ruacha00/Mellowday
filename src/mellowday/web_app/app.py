@@ -71,10 +71,11 @@ def create_app(
     async def set_skill_enabled(
         name: str, body: SkillEnablementBody
     ) -> dict[str, object]:
-        metadata = agent_core.set_skill_enabled(name, body.enabled)
-        if metadata is None:
+        change = agent_core.set_skill_enabled(name, body.enabled)
+        if change is None:
             raise HTTPException(status_code=404, detail="Skill not found")
-        return asdict(metadata)
+        metadata, event = change
+        return {"skill": asdict(metadata), "event": asdict(event)}
 
     @app.post("/api/chat")
     async def chat(body: ChatRequestBody) -> dict[str, object]:

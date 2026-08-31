@@ -124,9 +124,18 @@ def test_settings_persists_local_skill_enablement(tmp_path: Path) -> None:
             )
 
         assert disabled.status_code == 200
-        assert disabled.json() == {
+        payload = disabled.json()
+        assert payload["skill"] == {
             "name": "plain_language",
             "description": "Explain status in plain language.",
+            "enabled": False,
+        }
+        assert payload["event"]["sequence"] == 1
+        assert payload["event"]["type"] == "skill_enablement_changed"
+        assert payload["event"]["occurred_at"] > 0
+        assert payload["event"]["conversation_id"] is None
+        assert payload["event"]["details"] == {
+            "skill": "plain_language",
             "enabled": False,
         }
 
@@ -141,6 +150,6 @@ def test_settings_persists_local_skill_enablement(tmp_path: Path) -> None:
         ) as client:
             capabilities = await client.get("/api/settings/capabilities")
 
-        assert capabilities.json()["skills"] == [disabled.json()]
+        assert capabilities.json()["skills"] == [payload["skill"]]
 
     asyncio.run(disable_and_restart())

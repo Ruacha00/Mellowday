@@ -12,6 +12,8 @@ ToolExecutor: TypeAlias = Callable[[dict[str, object], str], Awaitable[object]]
 SkillInstructionLoader: TypeAlias = Callable[[], str]
 
 _TOOL_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+_SIDE_EFFECT_CLASSIFICATIONS = frozenset(("none", "reversible", "irreversible"))
+_RISK_CLASSIFICATIONS = frozenset(("low", "medium", "high"))
 _JSON_TYPES: dict[str, type[object] | tuple[type[object], ...]] = {
     "array": list,
     "boolean": bool,
@@ -53,6 +55,12 @@ class Tool:
             raise ValueError("Tool description must not be empty")
         if not callable(self.executor):
             raise TypeError("Tool executor must be callable")
+        if self.side_effect not in _SIDE_EFFECT_CLASSIFICATIONS:
+            raise ValueError(
+                f"invalid side-effect classification: {self.side_effect!r}"
+            )
+        if self.risk not in _RISK_CLASSIFICATIONS:
+            raise ValueError(f"invalid risk classification: {self.risk!r}")
         schema = dict(self.input_schema)
         schema.setdefault("type", "object")
         schema.setdefault("properties", {})
@@ -174,6 +182,32 @@ def _validate_value(path: str, schema: Mapping[str, object], value: object) -> N
     raw_enum = schema.get("enum")
     if isinstance(raw_enum, (list, tuple)) and value not in raw_enum:
         raise ToolArgumentsError(f"{path} must be one of {list(raw_enum)}")
+    if isinstance(value, str):
+        minimum_length = schema.get("minLength")
+        maximum_length = schema.get("maxLength")
+        if isinstance(minimum_length, int) and len(value) < minimum_length:
+            raise ToolArgumentsError(
+                f"{path} is shorter than minLength {minimum_length}"
+            )
+        if isinstance(maximum_length, int) and len(value) > maximum_length:
+            raise ToolArgumentsError(
+                f"{path} is longer than maxLength {maximum_length}"
+            )
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        minimum = schema.get("minimum")
+        maximum = schema.get("maximum")
+        if (
+            isinstance(minimum, (int, float))
+            and not isinstance(minimum, bool)
+            and value < minimum
+        ):
+            raise ToolArgumentsError(f"{path} is below minimum {minimum}")
+        if (
+            isinstance(maximum, (int, float))
+            and not isinstance(maximum, bool)
+            and value > maximum
+        ):
+            raise ToolArgumentsError(f"{path} is above maximum {maximum}")
     if isinstance(value, Mapping):
         _validate_object(path, schema, cast(Mapping[str, object], value))
     if isinstance(value, list) and isinstance(schema.get("items"), Mapping):

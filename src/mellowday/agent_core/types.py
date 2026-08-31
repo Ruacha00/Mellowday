@@ -5,7 +5,7 @@ from typing import Literal
 
 
 ChatRole = Literal["user", "assistant"]
-StopReason = Literal["final"]
+StopReason = Literal["final", "step_limit", "tool_call_limit"]
 EventType = Literal[
     "turn_started",
     "provider_started",
@@ -16,6 +16,8 @@ EventType = Literal[
     "skill_load_started",
     "skill_loaded",
     "skill_load_failed",
+    "skill_enablement_changed",
+    "turn_limit_reached",
     "turn_completed",
 ]
 
@@ -38,7 +40,7 @@ class RuntimeEvent:
     sequence: int
     type: EventType
     occurred_at: float
-    conversation_id: str
+    conversation_id: str | None
     details: dict[str, object] = field(default_factory=dict)
 
 
