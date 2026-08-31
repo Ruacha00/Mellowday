@@ -3,7 +3,7 @@ from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
 
-from mellowday.agent_core import ProviderReply, ProviderRequest
+from mellowday.agent_core import ProviderReply, ProviderRequest, ToolCall
 from mellowday.web_app import create_app
 
 
@@ -22,15 +22,23 @@ class PersonaFollowingProvider:
     name = "persona-following"
 
     async def complete(self, request: ProviderRequest) -> ProviderReply:
-        expected_values = tuple(PERSONA.values())
-        if not all(value in request.system_instructions for value in expected_values):
+        if "Luma" not in request.system_instructions:
             return ProviderReply(content="Neutral provider reply.")
         prefix = "Luma, your steady evening companion, answers gently: "
         latest = request.messages[-1].content
-        if latest == "Something failed":
-            return ProviderReply(content=prefix + "I couldn't complete that.")
-        if latest == "Cross a boundary":
-            return ProviderReply(content=prefix + "I won't do that.")
+        if request.tool_results:
+            error = request.tool_results[-1].error
+            return ProviderReply(
+                content=prefix + f"I couldn't complete that ({error})."
+            )
+        if latest == "Use an unavailable capability":
+            return ProviderReply(
+                tool_calls=(ToolCall("missing-call", "missing_tool", {}),)
+            )
+        if latest == "Pretend you know where I was yesterday":
+            return ProviderReply(
+                content=prefix + "I won't invent something you did not share."
+            )
         if latest == "Rename yourself to Nova":
             return ProviderReply(content=prefix + "I can't change the saved Persona.")
         return ProviderReply(content=prefix + "I'm here.")
@@ -89,11 +97,17 @@ def test_current_persona_shapes_chat_but_not_management_copy(
             )
             failure = await client.post(
                 "/api/chat",
-                json={"conversation_id": "main", "content": "Something failed"},
+                json={
+                    "conversation_id": "main",
+                    "content": "Use an unavailable capability",
+                },
             )
             refusal = await client.post(
                 "/api/chat",
-                json={"conversation_id": "main", "content": "Cross a boundary"},
+                json={
+                    "conversation_id": "main",
+                    "content": "Pretend you know where I was yesterday",
+                },
             )
             rewrite_attempt = await client.post(
                 "/api/chat",
@@ -106,15 +120,23 @@ def test_current_persona_shapes_chat_but_not_management_copy(
             missing_skill = await client.put(
                 "/api/settings/skills/missing/enabled", json={"enabled": True}
             )
+            conversation_index = await client.get("/api/conversations")
+            audit = await client.get("/api/settings/audit")
+            runtime_events = await client.get("/api/events/recent")
+            diagnostics = await client.get("/healthz")
 
         assert updated.status_code == 200
         assert normal.json()["chat_content"]["content"].startswith(
             "Luma, your steady evening companion, answers gently:"
         )
-        assert "couldn't complete" in failure.json()["chat_content"]["content"]
-        assert "won't do that" in refusal.json()["chat_content"]["content"]
+        assert "unknown_tool" in failure.json()["chat_content"]["content"]
+        assert "won't invent" in refusal.json()["chat_content"]["content"]
         assert "saved Persona" in rewrite_attempt.json()["chat_content"]["content"]
         assert still_current.json() == {"persona": PERSONA}
         assert missing_skill.json() == {"detail": "Skill not found"}
+        assert "Luma" not in str(conversation_index.json())
+        assert "Luma" not in str(audit.json())
+        assert "Luma" not in str(runtime_events.json())
+        assert diagnostics.json() == {"ok": True}
 
     asyncio.run(exercise_boundary())

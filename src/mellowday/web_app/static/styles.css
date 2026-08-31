@@ -546,12 +546,7 @@ button:disabled {
   font-size: 0.75rem;
 }
 
-.history-settings {
-  margin-bottom: 30px;
-  padding-bottom: 30px;
-  border-bottom: 1px solid var(--line);
-}
-
+.history-settings,
 .persona-settings {
   margin-bottom: 30px;
   padding-bottom: 30px;
