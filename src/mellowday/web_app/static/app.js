@@ -16,8 +16,45 @@ const confirmationList = document.querySelector("#confirmation-list");
 const confirmationCount = document.querySelector("#confirmation-count");
 const auditList = document.querySelector("#audit-list");
 const auditCount = document.querySelector("#audit-count");
+const conversationList = document.querySelector("#conversation-list");
+const historyTitle = document.querySelector("#history-detail-title");
+const historyMetadata = document.querySelector("#history-metadata");
+const historyMessages = document.querySelector("#history-messages");
+const resetHistory = document.querySelector("#reset-history");
+const resetConfirmation = document.querySelector("#reset-confirmation");
+const cancelReset = document.querySelector("#cancel-reset");
+const confirmReset = document.querySelector("#confirm-reset");
+const refreshHistory = document.querySelector("#refresh-history");
 
-function appendMessage(role, content) {
+const activeConversationId = "main";
+let selectedConversationId = null;
+let pendingResetConfirmation = null;
+
+function makeEmptyState(content) {
+  const empty = document.createElement("p");
+  empty.className = "empty-state";
+  empty.textContent = content;
+  return empty;
+}
+
+function showWelcome() {
+  messages.replaceChildren();
+  const item = document.createElement("li");
+  item.className = "welcome-note";
+
+  const mark = document.createElement("span");
+  mark.setAttribute("aria-hidden", "true");
+  mark.textContent = "悠";
+
+  const text = document.createElement("p");
+  text.textContent =
+    "Start anywhere. Say hello, share a thought, or simply see where the moment goes.";
+
+  item.append(mark, text);
+  messages.append(item);
+}
+
+function appendMessage(role, content, { scroll = true } = {}) {
   const item = document.createElement("li");
   item.className = `message message-${role}`;
   item.dataset.role = role;
@@ -31,7 +68,143 @@ function appendMessage(role, content) {
 
   item.append(label, text);
   messages.append(item);
-  item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (scroll) {
+    item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+async function loadActiveConversation() {
+  try {
+    const indexResponse = await fetch("/api/conversations");
+    if (!indexResponse.ok) {
+      throw new Error(`Request failed with ${indexResponse.status}`);
+    }
+    const index = await indexResponse.json();
+    const isStored = index.conversations.some(
+      (conversation) => conversation.conversation_id === activeConversationId,
+    );
+    if (!isStored) {
+      showWelcome();
+      return;
+    }
+
+    const response = await fetch(
+      `/api/conversations/${encodeURIComponent(activeConversationId)}`,
+    );
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+
+    const conversation = await response.json();
+    messages.replaceChildren();
+    conversation.messages.forEach((message) => {
+      appendMessage(message.role, message.content, { scroll: false });
+    });
+  } catch (error) {
+    showWelcome();
+    status.textContent = "Stored conversation history is unavailable.";
+  }
+}
+
+function clearHistoryDetail() {
+  clearResetConfirmation();
+  selectedConversationId = null;
+  historyTitle.textContent = "No conversation selected";
+  historyMetadata.textContent = "Choose a conversation to review its messages.";
+  historyMessages.replaceChildren(makeEmptyState("No messages selected."));
+  resetHistory.disabled = true;
+}
+
+function clearResetConfirmation() {
+  pendingResetConfirmation = null;
+  resetConfirmation.hidden = true;
+  resetHistory.hidden = false;
+  cancelReset.disabled = false;
+  confirmReset.disabled = false;
+}
+
+function formatUpdatedAt(value) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value * 1000));
+}
+
+function renderConversationList(conversations) {
+  conversationList.replaceChildren();
+  if (conversations.length === 0) {
+    conversationList.append(makeEmptyState("No conversations yet."));
+    clearHistoryDetail();
+    return;
+  }
+
+  conversations.forEach((conversation) => {
+    const button = document.createElement("button");
+    button.className = "conversation-card";
+    button.type = "button";
+    button.setAttribute(
+      "aria-label",
+      `${conversation.conversation_id} · ${conversation.message_count} messages`,
+    );
+
+    const identity = document.createElement("strong");
+    identity.textContent = conversation.conversation_id;
+    const count = document.createElement("span");
+    count.textContent = `${conversation.message_count} messages`;
+    const updated = document.createElement("small");
+    updated.textContent = formatUpdatedAt(conversation.updated_at);
+    button.append(identity, count, updated);
+    button.addEventListener("click", () => loadConversationDetail(conversation));
+    conversationList.append(button);
+  });
+}
+
+async function loadConversations() {
+  settingsStatus.textContent = "";
+  try {
+    const response = await fetch("/api/conversations");
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const payload = await response.json();
+    renderConversationList(payload.conversations);
+  } catch (error) {
+    conversationList.replaceChildren(
+      makeEmptyState("Conversation History is unavailable."),
+    );
+    clearHistoryDetail();
+    settingsStatus.textContent = "The local history service could not be read.";
+  }
+}
+
+async function loadConversationDetail(summary) {
+  clearResetConfirmation();
+  settingsStatus.textContent = "";
+  try {
+    const response = await fetch(
+      `/api/conversations/${encodeURIComponent(summary.conversation_id)}`,
+    );
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const payload = await response.json();
+    selectedConversationId = summary.conversation_id;
+    historyTitle.textContent = summary.conversation_id;
+    historyMetadata.textContent =
+      `${summary.message_count} messages · ${summary.character_count} characters · ` +
+      `updated ${formatUpdatedAt(summary.updated_at)}`;
+    historyMessages.replaceChildren();
+    payload.messages.forEach((message) => {
+      const item = document.createElement("li");
+      item.className = `history-message history-message-${message.role}`;
+
+      const role = document.createElement("span");
+      role.className = "message-label";
+      role.textContent = message.role === "user" ? "User" : "Assistant";
+      const content = document.createElement("p");
+      content.textContent = message.content;
+      item.append(role, content);
+      historyMessages.append(item);
+    });
+    resetHistory.disabled = false;
+  } catch (error) {
+    clearHistoryDetail();
+    settingsStatus.textContent = "The selected conversation could not be read.";
+  }
 }
 
 form.addEventListener("submit", async (event) => {
@@ -64,6 +237,74 @@ form.addEventListener("submit", async (event) => {
     input.focus();
   }
 });
+
+refreshHistory.addEventListener("click", loadConversations);
+
+resetHistory.addEventListener("click", async () => {
+  if (!selectedConversationId) return;
+  const conversationId = selectedConversationId;
+  resetHistory.disabled = true;
+  settingsStatus.textContent = "Preparing reset confirmation…";
+  try {
+    const response = await fetch(
+      `/api/conversations/${encodeURIComponent(conversationId)}/reset-confirmation`,
+      { method: "POST" },
+    );
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const payload = await response.json();
+    pendingResetConfirmation = payload.confirmation;
+    resetHistory.hidden = true;
+    resetConfirmation.hidden = false;
+    settingsStatus.textContent = "Explicit confirmation is required.";
+  } catch (error) {
+    resetHistory.disabled = false;
+    settingsStatus.textContent = "Reset confirmation could not be prepared.";
+  }
+});
+
+async function decideReset(decision) {
+  if (!selectedConversationId || !pendingResetConfirmation) return;
+  const conversationId = selectedConversationId;
+  cancelReset.disabled = true;
+  confirmReset.disabled = true;
+  settingsStatus.textContent =
+    decision === "accept"
+      ? "Resetting Conversation History…"
+      : "Cancelling reset…";
+  try {
+    const response = await fetch(
+      `/api/conversations/${encodeURIComponent(conversationId)}/reset`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmation_id: pendingResetConfirmation.id,
+          binding: pendingResetConfirmation.binding,
+          decision,
+        }),
+      },
+    );
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    clearResetConfirmation();
+    if (decision === "reject") {
+      resetHistory.disabled = false;
+      settingsStatus.textContent = "Reset cancelled.";
+      return;
+    }
+    if (conversationId === activeConversationId) showWelcome();
+    clearHistoryDetail();
+    await loadConversations();
+    settingsStatus.textContent = "Conversation History reset.";
+  } catch (error) {
+    cancelReset.disabled = false;
+    confirmReset.disabled = false;
+    settingsStatus.textContent = "Conversation History could not be reset.";
+  }
+}
+
+cancelReset.addEventListener("click", () => decideReset("reject"));
+confirmReset.addEventListener("click", () => decideReset("accept"));
+
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
@@ -369,6 +610,7 @@ async function loadSettings() {
   settingsStatus.textContent = "Loading Settings data.";
   try {
     await Promise.all([
+      loadConversations(),
       loadCapabilities(),
       loadConfirmations(),
       loadAuditHistory(),
@@ -392,3 +634,5 @@ settingsClose.addEventListener("click", () => {
   settingsToggle.setAttribute("aria-expanded", "false");
   settingsToggle.focus();
 });
+
+loadActiveConversation();

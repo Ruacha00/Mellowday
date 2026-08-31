@@ -12,6 +12,7 @@ from .audit import AuditLog
 from .confirmations import (
     ConfirmationBinding,
     ConfirmationDecision,
+    ConfirmationDecisionValue,
     ConfirmationResolution,
     ConfirmationStore,
     PendingConfirmation,
@@ -29,6 +30,7 @@ from .extensions import (
     UndoMetadata,
     validate_tool_arguments,
 )
+from .history import ConversationHistory
 from .provider import ModelProvider, ProviderRequest
 from .types import (
     ChatContent,
@@ -52,15 +54,28 @@ class AgentCore:
         max_tool_calls: int = 16,
         confirmation_ttl_seconds: float = 600,
         audit_path: str | Path | None = None,
+        conversation_history: ConversationHistory | None = None,
+        history_message_limit: int = 40,
+        history_character_limit: int = 12_000,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if max_provider_steps < 1:
             raise ValueError("max_provider_steps must be at least 1")
         if max_tool_calls < 0:
             raise ValueError("max_tool_calls must not be negative")
+        if history_message_limit < 1:
+            raise ValueError("history_message_limit must be positive")
+        if history_character_limit < 1:
+            raise ValueError("history_character_limit must be positive")
         self._provider = provider
         self._permission_engine = PermissionEngine()
         self._confirmations = ConfirmationStore(confirmation_ttl_seconds)
+        self._history_reset_confirmations = ConfirmationStore(
+            confirmation_ttl_seconds
+        )
+        self._conversation_history = conversation_history
+        self._history_message_limit = history_message_limit
+        self._history_character_limit = history_character_limit
         self._clock = clock
         self._max_provider_steps = max_provider_steps
         self._max_tool_calls = max_tool_calls
@@ -107,6 +122,62 @@ class AgentCore:
         """Return neutral action and runtime history in sequence order."""
 
         return self._audit.events()
+
+    def request_conversation_history_reset(
+        self, *, user_id: str, conversation_id: str
+    ) -> tuple[PendingConfirmation, RuntimeEvent]:
+        """Create a bound, expiring confirmation for an irreversible reset."""
+
+        binding = ConfirmationBinding(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            tool="conversation_history.reset",
+            arguments={},
+            initiating_context=(),
+        )
+        pending = self._history_reset_confirmations.create(
+            binding=binding,
+            call_id="conversation-history-reset",
+            granted_permissions=(),
+            prior_tool_results=(),
+            loaded_skills=(),
+            now=self._clock(),
+        )
+        event = self._runtime_event(
+            "confirmation_pending",
+            conversation_id=conversation_id,
+            confirmation_id=pending.id,
+            tool=binding.tool,
+            expires_at=pending.expires_at,
+        )
+        return pending, event
+
+    def decide_conversation_history_reset(
+        self, decision: ConfirmationDecision
+    ) -> tuple[ConfirmationDecisionValue, int, RuntimeEvent]:
+        """Resolve one reset confirmation and delete history only when accepted."""
+
+        resolution = self._history_reset_confirmations.decide(
+            decision, now=self._clock()
+        )
+        binding = resolution.pending.binding
+        removed_messages = 0
+        if resolution.decision == "accept":
+            if self._conversation_history is None:
+                raise RuntimeError("Conversation History is not configured")
+            removed_messages = self._conversation_history.reset(
+                binding.conversation_id
+            )
+            event_type: EventType = "confirmation_accepted"
+        else:
+            event_type = "confirmation_rejected"
+        event = self._runtime_event(
+            event_type,
+            conversation_id=binding.conversation_id,
+            confirmation_id=resolution.pending.id,
+            tool=binding.tool,
+        )
+        return resolution.decision, removed_messages, event
 
     async def decide_confirmation(
         self, decision: ConfirmationDecision
@@ -164,8 +235,10 @@ class AgentCore:
         )
         emit("provider_completed", provider=self._provider.name)
         emit("turn_completed", stop_reason=stop_reason)
+        chat_content = ChatContent(role="assistant", content=reply.content.strip())
+        self._record_history(binding.conversation_id, (chat_content,))
         return TurnResult(
-            chat_content=ChatContent(role="assistant", content=reply.content.strip()),
+            chat_content=chat_content,
             stop_reason=stop_reason,
             events=tuple(events),
         )
@@ -200,6 +273,16 @@ class AgentCore:
             ChatContent(role=message.role, content=message.content.strip())
             for message in request.messages
         )
+        history = (
+            self._conversation_history.recent(
+                conversation_id,
+                message_limit=self._history_message_limit,
+                character_limit=self._history_character_limit,
+            )
+            if self._conversation_history is not None
+            else ()
+        )
+        provider_messages = (*history, *messages)
         events: list[RuntimeEvent] = []
 
         def emit(event_type: EventType, **details: object) -> None:
@@ -224,18 +307,20 @@ class AgentCore:
             self._load_skill(skill_name, loaded_skills, emit)
         while True:
             if provider_steps >= self._max_provider_steps:
-                return self._limit_result(
+                result = self._limit_result(
                     events=events,
                     emit=emit,
                     stop_reason="step_limit",
                     limit="provider_steps",
                     reply_content=last_reply_content,
                 )
+                self._record_history(conversation_id, (*messages, result.chat_content))
+                return result
             provider_steps += 1
             emit("provider_started", provider=self._provider.name)
             reply = await self._provider.complete(
                 ProviderRequest(
-                    messages=messages,
+                    messages=provider_messages,
                     tools=self.list_tools(),
                     tool_results=tuple(tool_results),
                     skills=tuple(
@@ -253,13 +338,15 @@ class AgentCore:
                     final_stop_reason = "clarification"
                 break
             if tool_calls + len(reply.tool_calls) > self._max_tool_calls:
-                return self._limit_result(
+                result = self._limit_result(
                     events=events,
                     emit=emit,
                     stop_reason="tool_call_limit",
                     limit="tool_calls",
                     reply_content=last_reply_content,
                 )
+                self._record_history(conversation_id, (*messages, result.chat_content))
+                return result
             tool_calls += len(reply.tool_calls)
             for skill_name in reply.selected_skills:
                 self._load_skill(skill_name, loaded_skills, emit)
@@ -305,7 +392,7 @@ class AgentCore:
                 outcome = await self._execute_tool(
                     call,
                     execution_context,
-                    messages,
+                    provider_messages,
                     tuple(tool_results),
                     tuple(loaded_skills.values()),
                     emit,
@@ -328,7 +415,7 @@ class AgentCore:
                         tool=outcome.binding.tool,
                         expires_at=outcome.expires_at,
                     )
-                    return TurnResult(
+                    result = TurnResult(
                         chat_content=ChatContent(
                             role="assistant", content=reply.content.strip()
                         ),
@@ -336,15 +423,26 @@ class AgentCore:
                         events=tuple(events),
                         confirmation=outcome,
                     )
+                    self._record_history(
+                        conversation_id, (*messages, result.chat_content)
+                    )
+                    return result
                 tool_results.append(outcome)
 
         chat_content = ChatContent(role="assistant", content=reply.content.strip())
+        self._record_history(conversation_id, (*messages, chat_content))
         emit("turn_completed", stop_reason=final_stop_reason)
         return TurnResult(
             chat_content=chat_content,
             stop_reason=final_stop_reason,
             events=tuple(events),
         )
+
+    def _record_history(
+        self, conversation_id: str, messages: tuple[ChatContent, ...]
+    ) -> None:
+        if self._conversation_history is not None:
+            self._conversation_history.append(conversation_id, messages)
 
     def _runtime_event(
         self,

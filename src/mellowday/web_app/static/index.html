@@ -31,7 +31,11 @@
         </div>
       </header>
 
-      <section class="conversation" aria-labelledby="conversation-title">
+      <section
+        id="conversation-view"
+        class="view-panel conversation"
+        aria-labelledby="conversation-title"
+      >
         <div class="conversation-heading">
           <div>
             <p class="section-number">01 / Conversation</p>
@@ -76,10 +80,10 @@
         <header class="settings-heading">
           <div>
             <p class="section-number">02 / Settings</p>
-            <h2 id="settings-title">Capabilities</h2>
+            <h2 id="settings-title">Settings</h2>
             <p class="settings-intro">
-              Registered extensions available to Agent Core. Metadata here is
-              operational and does not use the Assistant Persona.
+              Review local history, extension metadata, confirmations, and
+              runtime records. Management copy remains neutral and precise.
             </p>
           </div>
           <button id="settings-close" class="management-button" type="button">
@@ -88,6 +92,71 @@
         </header>
 
         <p id="settings-status" class="settings-status" role="status"></p>
+
+        <section class="history-settings" aria-labelledby="history-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Stored locally</p>
+              <h3 id="history-settings-title">Conversation History</h3>
+              <p class="capability-description">
+                Review or reset a conversation without changing Memory or Life Records.
+              </p>
+            </div>
+            <span class="local-badge">Local · Versioned</span>
+          </header>
+
+          <div class="settings-grid">
+            <aside class="history-index" aria-labelledby="history-index-title">
+              <div class="history-index-heading">
+                <div>
+                  <p class="section-number">Conversation identity</p>
+                  <h3 id="history-index-title">Conversations</h3>
+                </div>
+                <button id="refresh-history" class="text-button" type="button">
+                  Refresh
+                </button>
+              </div>
+              <div id="conversation-list" class="conversation-list">
+                <p class="empty-state">Loading conversations…</p>
+              </div>
+            </aside>
+
+            <article class="history-detail" aria-labelledby="history-detail-title">
+              <header class="history-detail-heading">
+                <div>
+                  <p class="section-number">Selected conversation</p>
+                  <h3 id="history-detail-title">No conversation selected</h3>
+                  <p id="history-metadata" class="history-metadata">
+                    Choose a conversation to review its messages.
+                  </p>
+                </div>
+                <div class="history-reset-actions">
+                  <button id="reset-history" class="reset-button" type="button" disabled>
+                    Reset conversation
+                  </button>
+                  <div id="reset-confirmation" class="reset-confirmation" hidden>
+                    <p>This permanently deletes this conversation's messages.</p>
+                    <div>
+                      <button id="cancel-reset" class="text-button" type="button">
+                        Cancel
+                      </button>
+                      <button id="confirm-reset" class="reset-button" type="button">
+                        Confirm reset
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </header>
+              <ol
+                id="history-messages"
+                class="history-messages"
+                aria-live="polite"
+              >
+                <li class="empty-state">No messages selected.</li>
+              </ol>
+            </article>
+          </div>
+        </section>
 
         <div class="settings-operations">
           <section class="capability-section" aria-labelledby="confirmations-title">

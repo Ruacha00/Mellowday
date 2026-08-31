@@ -30,6 +30,14 @@ from .extensions import (
     ToolOutcome,
     UndoMetadata,
 )
+from .events import RuntimeEventLog
+from .history import (
+    ConversationHistory,
+    ConversationHistoryError,
+    ConversationSummary,
+    SQLiteConversationHistory,
+    StoredConversation,
+)
 from .provider import FakeProvider, ModelProvider, ProviderReply, ProviderRequest
 from .types import ChatContent, EventType, RuntimeEvent, TurnRequest, TurnResult
 
@@ -41,6 +49,9 @@ __all__ = [
     "ConfirmationDecisionValue",
     "ConfirmationError",
     "ConfirmationErrorCode",
+    "ConversationHistory",
+    "ConversationHistoryError",
+    "ConversationSummary",
     "ExecutionContext",
     "EventType",
     "FakeProvider",
@@ -54,6 +65,7 @@ __all__ = [
     "ProviderRequest",
     "RiskClassification",
     "RuntimeEvent",
+    "RuntimeEventLog",
     "SideEffectClassification",
     "Skill",
     "SkillInstructionLoader",
@@ -64,6 +76,8 @@ __all__ = [
     "ToolExecutor",
     "ToolMetadata",
     "ToolOutcome",
+    "SQLiteConversationHistory",
+    "StoredConversation",
     "TurnRequest",
     "TurnResult",
     "UndoMetadata",

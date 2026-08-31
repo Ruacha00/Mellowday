@@ -4,7 +4,7 @@
 
 Mellowday（悠日）是一位本地优先、自行部署的个人日常助手。她既陪你聊天，也帮你照看生活里的任务、提醒、日程、笔记和那些值得记住的小事。
 
-当前仓库包含首个可独立运行的纵向切片：浏览器 Conversation Surface 通过 Web App 后端调用公共 Agent Core facade，并由确定性的 Fake Provider 返回 Assistant Chat Content。产品边界和关键决策见 [Mellowday Product Direction](docs/product-direction.md)。
+当前仓库包含可独立运行的浏览器 Conversation Surface：Web App 后端调用公共 Agent Core facade，并由确定性的 Fake Provider 返回 Assistant Chat Content。Conversation History 使用本地、版本化的 SQLite 持久化；刷新页面或重启后端后仍可恢复，并可在同一界面的 Settings 中查看或重置。产品边界和关键决策见 [Mellowday Product Direction](docs/product-direction.md)。
 
 ## Prerequisites
 
@@ -33,7 +33,9 @@ python -m pip install -r requirements.txt
 python -m mellowday.web_app
 ```
 
-打开 <http://127.0.0.1:8000/>；健康检查位于 <http://127.0.0.1:8000/healthz>。当前切片刻意使用 Fake Provider，不需要模型凭据或网络访问。
+打开 <http://127.0.0.1:8000/>；健康检查位于 <http://127.0.0.1:8000/healthz>。默认 Conversation History 数据库位于 `data/mellowday.sqlite3`，首次启动时会自动初始化。当前切片刻意使用 Fake Provider，不需要模型凭据或网络访问。
+
+应用组合可通过 `create_app` 的 `conversation_database_path`、`history_message_limit` 和 `history_character_limit` 参数调整本地数据位置，以及传给 Agent Core 的最近历史消息数和字符预算。
 
 ## Test and build
 

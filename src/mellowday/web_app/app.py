@@ -1,12 +1,12 @@
 """Browser-facing Web App boundary."""
 
-from dataclasses import asdict
 from collections.abc import Iterable
+from dataclasses import asdict
 from pathlib import Path
 from typing import Literal, assert_never
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -17,9 +17,12 @@ from mellowday.agent_core import (
     ConfirmationDecision,
     ConfirmationError,
     ConfirmationErrorCode,
+    ConversationHistoryError,
     FakeProvider,
     ModelProvider,
+    RuntimeEventLog,
     Skill,
+    SQLiteConversationHistory,
     Tool,
     TurnRequest,
 )
@@ -57,6 +60,23 @@ class ConfirmationDecisionBody(BaseModel):
     binding: ConfirmationBindingBody
 
 
+class ConversationResetDecisionBody(ConfirmationDecisionBody):
+    confirmation_id: str
+
+
+def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
+    return ConfirmationBinding(
+        user_id=body.user_id,
+        conversation_id=body.conversation_id,
+        tool=body.tool,
+        arguments=body.arguments,
+        initiating_context=tuple(
+            ChatContent(role=item.role, content=item.content)
+            for item in body.initiating_context
+        ),
+    )
+
+
 def _confirmation_status_code(code: ConfirmationErrorCode) -> int:
     match code:
         case "not_found":
@@ -75,19 +95,48 @@ def create_app(
     skills: Iterable[Skill] = (),
     skill_state_path: str | Path | None = _DEFAULT_SKILL_STATE_PATH,
     audit_path: str | Path | None = _DEFAULT_AUDIT_PATH,
+    conversation_database_path: str | Path | None = None,
+    history_message_limit: int = 40,
+    history_character_limit: int = 12_000,
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
     selected_provider = provider if provider is not None else FakeProvider()
+    database_path = (
+        Path(conversation_database_path)
+        if conversation_database_path is not None
+        else Path.cwd() / "data" / "mellowday.sqlite3"
+    )
+    runtime_events = RuntimeEventLog()
+    conversation_history = SQLiteConversationHistory(
+        database_path, events=runtime_events
+    )
     agent_core = AgentCore(
         provider=selected_provider,
         tools=tools,
         skills=skills,
         skill_state_path=skill_state_path,
         audit_path=audit_path,
+        conversation_history=conversation_history,
+        history_message_limit=history_message_limit,
+        history_character_limit=history_character_limit,
     )
     app = FastAPI(title="Mellowday", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=_STATIC_DIRECTORY), name="static")
+
+    @app.exception_handler(ConversationHistoryError)
+    async def conversation_history_failure(
+        _request: Request, error: ConversationHistoryError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": {
+                    "code": "conversation_history_unavailable",
+                    "operation": error.operation,
+                }
+            },
+        )
 
     @app.get("/", response_class=FileResponse)
     async def conversation_surface() -> FileResponse:
@@ -127,16 +176,7 @@ def create_app(
     async def decide_confirmation(
         confirmation_id: str, body: ConfirmationDecisionBody
     ) -> dict[str, object]:
-        binding = ConfirmationBinding(
-            user_id=body.binding.user_id,
-            conversation_id=body.binding.conversation_id,
-            tool=body.binding.tool,
-            arguments=body.binding.arguments,
-            initiating_context=tuple(
-                ChatContent(role=item.role, content=item.content)
-                for item in body.binding.initiating_context
-            ),
-        )
+        binding = _confirmation_binding(body.binding)
         try:
             turn = await agent_core.decide_confirmation(
                 ConfirmationDecision(
@@ -167,5 +207,75 @@ def create_app(
             )
         )
         return asdict(result)
+
+    @app.get("/api/conversations")
+    async def list_conversations() -> dict[str, object]:
+        return {
+            "conversations": [
+                asdict(conversation)
+                for conversation in conversation_history.list_conversations()
+            ]
+        }
+
+    @app.get("/api/conversations/{conversation_id}")
+    async def get_conversation(conversation_id: str) -> dict[str, object]:
+        conversation = conversation_history.get_conversation(conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {
+            "conversation": asdict(conversation.summary),
+            "messages": [asdict(message) for message in conversation.messages],
+        }
+
+    @app.post("/api/conversations/{conversation_id}/reset")
+    async def reset_conversation(
+        conversation_id: str, body: ConversationResetDecisionBody
+    ) -> dict[str, object]:
+        if body.binding.conversation_id != conversation_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Confirmation is bound to a different conversation",
+            )
+        binding = _confirmation_binding(body.binding)
+        try:
+            decision, removed_messages, event = (
+                agent_core.decide_conversation_history_reset(
+                    ConfirmationDecision(
+                        confirmation_id=body.confirmation_id,
+                        binding=binding,
+                        decision=body.decision,
+                    )
+                )
+            )
+        except ConfirmationError as error:
+            raise HTTPException(
+                status_code=_confirmation_status_code(error.code),
+                detail="Confirmation is unavailable for this decision",
+            ) from error
+        return {
+            "ok": decision == "accept",
+            "decision": decision,
+            "removed_messages": removed_messages,
+            "event": asdict(event),
+        }
+
+    @app.post("/api/conversations/{conversation_id}/reset-confirmation")
+    async def request_reset_confirmation(
+        conversation_id: str,
+    ) -> dict[str, object]:
+        if conversation_history.get_conversation(conversation_id) is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        confirmation, event = agent_core.request_conversation_history_reset(
+            user_id="local-user", conversation_id=conversation_id
+        )
+        return {"confirmation": asdict(confirmation), "event": asdict(event)}
+
+    @app.get("/api/events/recent")
+    async def recent_events(limit: int = 100) -> dict[str, object]:
+        return {
+            "events": [
+                asdict(event) for event in runtime_events.recent(limit=limit)
+            ]
+        }
 
     return app
