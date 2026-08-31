@@ -379,7 +379,7 @@ def test_user_can_search_correct_and_forget_memory_from_settings(
                         {
                             "content": "I prefer concise replies.",
                             "kind": "preference",
-                            "provenance": "explicit",
+                            "evidence": "Remember that I prefer concise replies.",
                         },
                     ),
                 )
@@ -395,7 +395,9 @@ def test_user_can_search_correct_and_forget_memory_from_settings(
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(base_url)
-        page.get_by_label("Message").fill("Remember my reply preference.")
+        page.get_by_label("Message").fill(
+            "Remember that I prefer concise replies."
+        )
         page.get_by_role("button", name="Send").click()
         expect(page.locator('[data-role="assistant"] p').last).to_have_text(
             "I'll remember that."

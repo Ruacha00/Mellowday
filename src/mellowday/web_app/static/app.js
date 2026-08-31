@@ -374,6 +374,16 @@ function addText(parent, className, content) {
   return element;
 }
 
+function actionButton(label, accessibleLabel, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = label;
+  button.setAttribute("aria-label", `${label} ${accessibleLabel}`);
+  button.addEventListener("click", handler);
+  return button;
+}
+
 function renderTools(tools) {
   toolList.replaceChildren();
   toolCount.textContent = String(tools.length);
@@ -533,16 +543,6 @@ function editMemory(memory) {
   memoryForm.elements.namedItem("content").focus();
 }
 
-function memoryAction(label, memory, handler) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "text-button";
-  button.textContent = label;
-  button.setAttribute("aria-label", `${label} ${memory.content}`);
-  button.addEventListener("click", handler);
-  return button;
-}
-
 function renderMemories(memories) {
   memoryList.replaceChildren();
   if (memories.length === 0) {
@@ -563,8 +563,8 @@ function renderMemories(memories) {
     const actions = document.createElement("div");
     actions.className = "task-actions";
     actions.append(
-      memoryAction("Edit", memory, () => editMemory(memory)),
-      memoryAction("Delete", memory, async () => {
+      actionButton("Edit", memory.content, () => editMemory(memory)),
+      actionButton("Delete", memory.content, async () => {
         if (!window.confirm(`Permanently forget ${memory.content}?`)) return;
         const path = `/api/settings/memories/${encodeURIComponent(memory.id)}`;
         const requested = await fetch(`${path}/delete-confirmation`, {
@@ -647,16 +647,6 @@ function editTask(task) {
   taskForm.elements.namedItem("title").focus();
 }
 
-function taskAction(label, task, handler) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "text-button";
-  button.textContent = label;
-  button.setAttribute("aria-label", `${label} ${task.title}`);
-  button.addEventListener("click", handler);
-  return button;
-}
-
 function renderTasks(tasks) {
   taskList.replaceChildren();
   if (tasks.length === 0) {
@@ -683,7 +673,7 @@ function renderTasks(tasks) {
     const actions = document.createElement("div");
     actions.className = "task-actions";
     actions.append(
-      taskAction(task.completed ? "Reopen" : "Complete", task, async () => {
+      actionButton(task.completed ? "Reopen" : "Complete", task.title, async () => {
         const operation = task.completed ? "reopen" : "complete";
         const response = await fetch(
           `/api/settings/tasks/${encodeURIComponent(task.id)}/${operation}`,
@@ -696,8 +686,8 @@ function renderTasks(tasks) {
         settingsStatus.textContent = task.completed ? "Task reopened." : "Task completed.";
         await loadTasks();
       }),
-      taskAction("Edit", task, () => editTask(task)),
-      taskAction("Delete", task, async () => {
+      actionButton("Edit", task.title, () => editTask(task)),
+      actionButton("Delete", task.title, async () => {
         if (!window.confirm(`Permanently delete ${task.title}?`)) return;
         const path = `/api/settings/tasks/${encodeURIComponent(task.id)}`;
         const requested = await fetch(`${path}/delete-confirmation`, {
@@ -794,16 +784,6 @@ function editNote(note) {
   noteForm.elements.namedItem("content").focus();
 }
 
-function noteAction(label, note, handler) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "text-button";
-  button.textContent = label;
-  button.setAttribute("aria-label", `${label} ${noteLabel(note)}`);
-  button.addEventListener("click", handler);
-  return button;
-}
-
 function renderNotes(notes) {
   noteList.replaceChildren();
   if (notes.length === 0) {
@@ -827,8 +807,8 @@ function renderNotes(notes) {
     const actions = document.createElement("div");
     actions.className = "task-actions";
     actions.append(
-      noteAction("Edit", note, () => editNote(note)),
-      noteAction("Delete", note, async () => {
+      actionButton("Edit", noteLabel(note), () => editNote(note)),
+      actionButton("Delete", noteLabel(note), async () => {
         if (!window.confirm(`Permanently delete ${noteLabel(note)}?`)) return;
         const path = `/api/settings/notes/${encodeURIComponent(note.id)}`;
         const requested = await fetch(`${path}/delete-confirmation`, { method: "POST" });
@@ -922,16 +902,6 @@ function editReminder(reminder) {
   reminderForm.elements.namedItem("message").focus();
 }
 
-function reminderAction(label, reminder, handler) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "text-button";
-  button.textContent = label;
-  button.setAttribute("aria-label", `${label} ${reminder.message}`);
-  button.addEventListener("click", handler);
-  return button;
-}
-
 function reminderStateLabel(state) {
   return state.charAt(0).toUpperCase() + state.slice(1);
 }
@@ -962,8 +932,8 @@ function renderReminders(reminders) {
     const actions = document.createElement("div");
     actions.className = "task-actions";
     actions.append(
-      reminderAction("Edit", reminder, () => editReminder(reminder)),
-      reminderAction("Dismiss", reminder, async () => {
+      actionButton("Edit", reminder.message, () => editReminder(reminder)),
+      actionButton("Dismiss", reminder.message, async () => {
         const response = await fetch(
           `/api/settings/reminders/${encodeURIComponent(reminder.id)}/dismiss`,
           { method: "POST" },
@@ -971,7 +941,7 @@ function renderReminders(reminders) {
         settingsStatus.textContent = response.ok ? "Reminder dismissed." : "Reminder could not be dismissed.";
         if (response.ok) await loadReminders();
       }),
-      reminderAction("Cancel", reminder, async () => {
+      actionButton("Cancel", reminder.message, async () => {
         const response = await fetch(
           `/api/settings/reminders/${encodeURIComponent(reminder.id)}/cancel`,
           { method: "POST" },
@@ -979,7 +949,7 @@ function renderReminders(reminders) {
         settingsStatus.textContent = response.ok ? "Reminder cancelled." : "Reminder could not be cancelled.";
         if (response.ok) await loadReminders();
       }),
-      reminderAction("Delete", reminder, async () => {
+      actionButton("Delete", reminder.message, async () => {
         if (!window.confirm(`Permanently delete ${reminder.message}?`)) return;
         const path = `/api/settings/reminders/${encodeURIComponent(reminder.id)}`;
         const requested = await fetch(`${path}/delete-confirmation`, { method: "POST" });
@@ -1075,16 +1045,6 @@ function editCalendarEvent(event) {
   calendarEventForm.elements.namedItem("title").focus();
 }
 
-function calendarEventAction(label, event, handler) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "text-button";
-  button.textContent = label;
-  button.setAttribute("aria-label", `${label} ${event.title}`);
-  button.addEventListener("click", handler);
-  return button;
-}
-
 function renderCalendarEvents(events, conflicts) {
   calendarEventList.replaceChildren();
   if (events.length === 0) {
@@ -1119,8 +1079,8 @@ function renderCalendarEvents(events, conflicts) {
     const actions = document.createElement("div");
     actions.className = "task-actions";
     actions.append(
-      calendarEventAction("Edit", event, () => editCalendarEvent(event)),
-      calendarEventAction("Delete", event, async () => {
+      actionButton("Edit", event.title, () => editCalendarEvent(event)),
+      actionButton("Delete", event.title, async () => {
         if (!window.confirm(`Permanently delete ${event.title}?`)) return;
         const path = `/api/settings/calendar-events/${encodeURIComponent(event.id)}`;
         const requested = await fetch(`${path}/delete-confirmation`, { method: "POST" });
@@ -1220,16 +1180,6 @@ function editProvider(provider) {
   providerForm.elements.namedItem("name").focus();
 }
 
-function providerAction(label, provider, handler) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "text-button";
-  button.textContent = label;
-  button.setAttribute("aria-label", `${label} ${provider.name}`);
-  button.addEventListener("click", handler);
-  return button;
-}
-
 function renderProviders(providers) {
   providerList.replaceChildren();
   if (providers.length === 0) {
@@ -1298,8 +1248,8 @@ function renderProviders(providers) {
     const actions = document.createElement("div");
     actions.className = "provider-actions";
     actions.append(
-      providerAction("Edit", provider, () => editProvider(provider)),
-      providerAction("Validate", provider, async () => {
+      actionButton("Edit", provider.name, () => editProvider(provider)),
+      actionButton("Validate", provider.name, async () => {
         settingsStatus.textContent = `Validating ${provider.name}.`;
         try {
           const response = await fetch(
@@ -1320,7 +1270,7 @@ function renderProviders(providers) {
     );
     if (!provider.selected) {
       actions.append(
-        providerAction("Select", provider, async () => {
+        actionButton("Select", provider.name, async () => {
           try {
             const response = await fetch(
               `/api/settings/providers/${encodeURIComponent(provider.id)}/select`,

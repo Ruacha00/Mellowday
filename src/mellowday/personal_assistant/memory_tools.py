@@ -6,22 +6,27 @@ from typing import Literal, cast
 from mellowday.agent_core import Tool
 
 from .memories import MemoryKind, MemoryNotFoundError, SQLiteMemoryService
+from .memory_policy import MemoryLearningPolicy
 
 
 def build_memory_tools(service: SQLiteMemoryService) -> tuple[Tool, ...]:
+    policy = MemoryLearningPolicy(service)
+
     async def remember(
         arguments: dict[str, object], conversation_id: str
     ) -> object:
-        memory = service.remember(
+        memory = policy.remember_explicit(
             content=cast(str, arguments["content"]),
             kind=cast(MemoryKind, arguments["kind"]),
-            provenance="explicit",
+            evidence=cast(str, arguments["evidence"]),
             source_conversation_id=conversation_id,
         )
+        if memory is None:
+            return {"memory": None, "rejected": "not_explicit_durable_evidence"}
         return {"memory": asdict(memory)}
 
     async def learn(arguments: dict[str, object], conversation_id: str) -> object:
-        memory = service.remember_automatic(
+        memory = policy.remember_automatic(
             content=cast(str, arguments["content"]),
             kind=cast(Literal["preference", "fact"], arguments["kind"]),
             evidence=cast(str, arguments["evidence"]),
@@ -59,17 +64,15 @@ def build_memory_tools(service: SQLiteMemoryService) -> tuple[Tool, ...]:
                         "type": "string",
                         "enum": ["preference", "fact", "important"],
                     },
-                    "provenance": {
-                        "type": "string",
-                        "enum": ["explicit"],
-                    },
+                    "evidence": {"type": "string", "minLength": 1},
                 },
-                "required": ["content", "kind", "provenance"],
+                "required": ["content", "kind", "evidence"],
                 "additionalProperties": False,
             },
             executor=remember,
             permission_requirements=("memory:write",),
             side_effect="reversible",
+            user_evidence_argument="evidence",
         ),
         Tool(
             name="memory_learn",

@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-import re
 import sqlite3
 import time
 from typing import Literal, TypedDict, cast
@@ -11,7 +10,7 @@ from uuid import uuid4
 
 
 MemoryKind = Literal["preference", "fact", "important"]
-MemoryProvenance = Literal["explicit", "automatic", "settings"]
+MemoryProvenance = Literal["explicit", "automatic"]
 MemoryChangeOperation = Literal["created", "updated", "deleted"]
 
 
@@ -184,85 +183,6 @@ class SQLiteMemoryService:
         self._notify(MemoryChange("deleted", memory_id, conversation_id))
         return memory
 
-    def remember_automatic(
-        self,
-        *,
-        content: str,
-        kind: Literal["preference", "fact"],
-        evidence: str,
-        source_conversation_id: str,
-    ) -> Memory | None:
-        """Persist only a directly supported, stable User fact or preference."""
-
-        normalized_content = _normalized_claim(content)
-        normalized_evidence = _normalized_claim(evidence)
-        if not normalized_content or normalized_content not in normalized_evidence:
-            return None
-        rejected_markers = (
-            " just kidding ",
-            " joking ",
-            " haha ",
-            " lol ",
-            " today ",
-            " right now ",
-            " this morning ",
-            " this evening ",
-            " feel sad ",
-            " feel angry ",
-            " feel tired ",
-            " feel upset ",
-            " feel stressed ",
-        )
-        padded_evidence = f" {normalized_evidence} "
-        if any(marker in padded_evidence for marker in rejected_markers):
-            return None
-        stable_cues = (
-            " i prefer ",
-            " i like ",
-            " i love ",
-            " i dislike ",
-            " i hate ",
-            " i don t ",
-            " i do not ",
-            " i use ",
-            " i work ",
-            " i am ",
-            " i m ",
-            " my ",
-        )
-        if not any(cue in padded_evidence for cue in stable_cues):
-            return None
-        return self.remember(
-            content=content,
-            kind=kind,
-            provenance="automatic",
-            source_conversation_id=source_conversation_id,
-        )
-
-    def relevant(self, query: str, *, limit: int = 5) -> tuple[Memory, ...]:
-        terms = _search_terms(query)
-        if not terms:
-            return ()
-        scored = []
-        for memory in self.list():
-            score = len(terms & _search_terms(memory.content))
-            if score:
-                scored.append((score, memory.updated_at, memory))
-        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
-        return tuple(item[2] for item in scored[:limit])
-
-    def context_instructions(self, query: str) -> str:
-        memories = self.relevant(query)
-        if not memories:
-            return ""
-        rendered = "\n".join(f"- {memory.content}" for memory in memories)
-        return (
-            "Relevant Memory about the User for this turn only:\n"
-            f"{rendered}\n"
-            "Use it only when it helps answer the current message. Do not expose "
-            "Memory identifiers, provenance, or unrelated stored information."
-        )
-
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -297,41 +217,6 @@ class SQLiteMemoryService:
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self._database_path)
-
-
-def _normalized_claim(value: str) -> str:
-    return re.sub(r"[^\w]+", " ", value.casefold()).strip()
-
-
-_SEARCH_STOP_WORDS = frozenset(
-    {
-        "a",
-        "about",
-        "am",
-        "an",
-        "and",
-        "are",
-        "do",
-        "for",
-        "i",
-        "in",
-        "is",
-        "me",
-        "my",
-        "of",
-        "the",
-        "to",
-        "what",
-    }
-)
-
-
-def _search_terms(value: str) -> frozenset[str]:
-    return frozenset(
-        term
-        for term in _normalized_claim(value).split()
-        if len(term) > 1 and term not in _SEARCH_STOP_WORDS
-    )
 
 
 __all__ = [

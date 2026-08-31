@@ -27,7 +27,7 @@ def test_explicit_chat_request_saves_inspectable_memory_directly(
                         {
                             "content": "I prefer concise replies.",
                             "kind": "preference",
-                            "provenance": "explicit",
+                            "evidence": "Remember that I prefer concise replies.",
                         },
                     ),
                 )
@@ -69,6 +69,60 @@ def test_explicit_chat_request_saves_inspectable_memory_directly(
     asyncio.run(exercise())
 
 
+def test_memory_remember_rejects_a_model_call_without_explicit_user_intent(
+    tmp_path: Path,
+) -> None:
+    class HallucinatingProvider:
+        name = "hallucinating-memory-script"
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            if request.tool_results:
+                result = request.tool_results[-1].result
+                assert result == {
+                    "memory": None,
+                    "rejected": "not_explicit_durable_evidence",
+                }
+                return ProviderReply(content="I did not save that as Memory.")
+            return ProviderReply(
+                tool_calls=(
+                    ToolCall(
+                        "unsupported-explicit-save",
+                        "memory_remember",
+                        {
+                            "content": "The cafe closes at nine.",
+                            "kind": "fact",
+                            "evidence": "The cafe closes at nine.",
+                        },
+                    ),
+                )
+            )
+
+    async def exercise() -> None:
+        app = create_app(
+            provider=HallucinatingProvider(),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            chat = await client.post(
+                "/api/chat",
+                json={
+                    "conversation_id": "main",
+                    "content": "The cafe closes at nine.",
+                },
+            )
+            memories = await client.get("/api/settings/memories")
+
+        assert chat.json()["chat_content"]["content"] == (
+            "I did not save that as Memory."
+        )
+        assert memories.json() == {"memories": []}
+
+    asyncio.run(exercise())
+
+
 def test_automatic_memory_uses_a_conservative_evidence_boundary(
     tmp_path: Path,
 ) -> None:
@@ -97,6 +151,16 @@ def test_automatic_memory_uses_a_conservative_evidence_boundary(
             "content": "I prefer tea.",
             "kind": "preference",
             "evidence": "I prefer tea.",
+        },
+        "I am sad.": {
+            "content": "I am sad.",
+            "kind": "fact",
+            "evidence": "I am sad.",
+        },
+        "I love moon rocks, kidding.": {
+            "content": "I love moon rocks, kidding.",
+            "kind": "preference",
+            "evidence": "I love moon rocks, kidding.",
         },
     }
 
@@ -163,10 +227,10 @@ def test_later_turn_receives_relevant_memory_without_unrelated_records(
                         ToolCall(
                             f"remember-{kind}",
                             "memory_remember",
-                            {
-                                "content": content,
-                                "kind": kind,
-                                "provenance": "explicit",
+                                {
+                                    "content": content,
+                                    "kind": kind,
+                                    "evidence": message,
                             },
                         ),
                     )
@@ -188,7 +252,11 @@ def test_later_turn_receives_relevant_memory_without_unrelated_records(
             for content in (
                 "Remember I use Python for work.",
                 "Remember I prefer window seats when flying.",
+                "Remember I do not eat cilantro.",
                 "What language do I use for work?",
+                "Which seat should I select?",
+                "What language do I like?",
+                "Any dinner ideas?",
                 "What should I buy for my garden?",
             ):
                 response = await client.post(
@@ -199,8 +267,18 @@ def test_later_turn_receives_relevant_memory_without_unrelated_records(
 
         relevant = provider.instructions["What language do I use for work?"]
         unrelated = provider.instructions["What should I buy for my garden?"]
+        seat_context = provider.instructions["Which seat should I select?"]
+        language_context = provider.instructions["What language do I like?"]
+        dinner_context = provider.instructions["Any dinner ideas?"]
         assert "I use Python for work." in relevant
         assert "window seats" not in relevant
+        assert "window seats" in seat_context
+        assert "I use Python for work." not in seat_context
+        assert "I use Python for work." in language_context
+        assert "window seats" not in language_context
+        assert "I do not eat cilantro." in dinner_context
+        assert "Python" not in dinner_context
+        assert "window seats" not in dinner_context
         assert "I use Python for work." not in unrelated
         assert "window seats" not in unrelated
 
@@ -224,7 +302,7 @@ def test_settings_corrects_and_deletes_memory_after_restart(
                         {
                             "content": "I prefer concise replies.",
                             "kind": "preference",
-                            "provenance": "explicit",
+                            "evidence": "Remember that I prefer concise replies.",
                         },
                     ),
                 )
@@ -242,7 +320,10 @@ def test_settings_corrects_and_deletes_memory_after_restart(
         ) as client:
             await client.post(
                 "/api/chat",
-                json={"conversation_id": "main", "content": "Remember this."},
+                json={
+                    "conversation_id": "main",
+                    "content": "Remember that I prefer concise replies.",
+                },
             )
             created = (await client.get("/api/settings/memories")).json()[
                 "memories"
@@ -348,10 +429,12 @@ def test_natural_forgetting_uses_the_shared_service_and_action_policy(
                         ToolCall(
                             "remember-memory",
                             "memory_remember",
-                            {
-                                "content": "I prefer window seats when flying.",
-                                "kind": "preference",
-                                "provenance": "explicit",
+                                {
+                                    "content": "I prefer window seats when flying.",
+                                    "kind": "preference",
+                                    "evidence": (
+                                        "Remember that I prefer window seats when flying."
+                                    ),
                             },
                         ),
                     )
@@ -375,7 +458,12 @@ def test_natural_forgetting_uses_the_shared_service_and_action_policy(
         ) as client:
             await client.post(
                 "/api/chat",
-                json={"conversation_id": "main", "content": "Remember this."},
+                json={
+                    "conversation_id": "main",
+                    "content": (
+                        "Remember that I prefer window seats when flying."
+                    ),
+                },
             )
             pending = await client.post(
                 "/api/chat",

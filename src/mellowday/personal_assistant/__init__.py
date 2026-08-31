@@ -21,6 +21,8 @@ from .memories import (
     SQLiteMemoryService,
 )
 from .memory_tools import build_memory_tools
+from .memory_context import AssistantContextAssembler, MemoryRetriever
+from .memory_policy import MemoryLearningPolicy
 from .calendar_event_tools import build_calendar_event_tools
 from .persona import Persona, SQLitePersonaStore
 from .note_tools import build_note_tools
@@ -57,6 +59,7 @@ from .tasks import (
 )
 
 __all__ = [
+    "AssistantContextAssembler",
     "CalendarEvent",
     "CalendarEventChange",
     "CalendarEventNotFoundError",
@@ -67,8 +70,10 @@ __all__ = [
     "Memory",
     "MemoryChange",
     "MemoryKind",
+    "MemoryLearningPolicy",
     "MemoryNotFoundError",
     "MemoryProvenance",
+    "MemoryRetriever",
     "MemoryUpdates",
     "MemoryValidationError",
     "Persona",

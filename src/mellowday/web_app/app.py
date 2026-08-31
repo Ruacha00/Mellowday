@@ -37,11 +37,13 @@ from mellowday.agent_core.openai_compatible import (
     ProviderTransport,
 )
 from mellowday.personal_assistant import (
+    AssistantContextAssembler,
     CalendarEvent,
     CalendarEventChange,
     CalendarEventUpdates,
     CalendarEventValidationError,
     MemoryChange,
+    MemoryRetriever,
     MemoryUpdates,
     MemoryValidationError,
     NoteChange,
@@ -252,8 +254,22 @@ def create_app(
     provider_store = SQLiteProviderConfigurationStore(database_path)
     agent_core_reference: list[AgentCore] = []
 
-    def record_task_change(change: TaskChange) -> None:
+    def record_application_change(
+        *,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        conversation_id: str | None,
+    ) -> None:
         agent_core_reference[0].record_application_action(
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            conversation_id=conversation_id,
+        )
+
+    def record_task_change(change: TaskChange) -> None:
+        record_application_change(
             action=change.operation,
             resource_type="task",
             resource_id=change.task_id,
@@ -265,7 +281,7 @@ def create_app(
     )
 
     def record_note_change(change: NoteChange) -> None:
-        agent_core_reference[0].record_application_action(
+        record_application_change(
             action=change.operation,
             resource_type="note",
             resource_id=change.note_id,
@@ -277,7 +293,7 @@ def create_app(
     )
 
     def record_reminder_change(change: ReminderChange) -> None:
-        agent_core_reference[0].record_application_action(
+        record_application_change(
             action=change.operation,
             resource_type="reminder",
             resource_id=change.reminder_id,
@@ -291,7 +307,7 @@ def create_app(
     )
 
     def record_calendar_event_change(change: CalendarEventChange) -> None:
-        agent_core_reference[0].record_application_action(
+        record_application_change(
             action=change.operation,
             resource_type="calendar_event",
             resource_id=change.event_id,
@@ -305,7 +321,7 @@ def create_app(
     )
 
     def record_memory_change(change: MemoryChange) -> None:
-        agent_core_reference[0].record_application_action(
+        record_application_change(
             action=change.operation,
             resource_type="memory",
             resource_id=change.memory_id,
@@ -314,6 +330,9 @@ def create_app(
 
     memory_service = SQLiteMemoryService(
         database_path, change_listener=record_memory_change
+    )
+    assistant_context = AssistantContextAssembler(
+        persona_store.get, MemoryRetriever(memory_service)
     )
 
     def calendar_event_payload(event: CalendarEvent) -> dict[str, object]:
@@ -351,12 +370,8 @@ def create_app(
         conversation_history=conversation_history,
         history_message_limit=history_message_limit,
         history_character_limit=history_character_limit,
-        system_instructions_provider=lambda: persona_store.get().chat_instructions(),
-        context_instructions_provider=lambda messages: (
-            memory_service.context_instructions(messages[-1].content)
-            if messages
-            else ""
-        ),
+        system_instructions_provider=None,
+        context_instructions_provider=assistant_context.instructions,
         provider_failure_content_provider=(
             lambda error: persona_store.get().provider_failure_chat_content(error.code)
         ),
