@@ -3,6 +3,7 @@
 from dataclasses import asdict
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -12,6 +13,9 @@ from pydantic import BaseModel
 from mellowday.agent_core import (
     AgentCore,
     ChatContent,
+    ConfirmationBinding,
+    ConfirmationDecision,
+    ConfirmationError,
     FakeProvider,
     ModelProvider,
     Skill,
@@ -31,6 +35,24 @@ class ChatRequestBody(BaseModel):
 
 class SkillEnablementBody(BaseModel):
     enabled: bool
+
+
+class ConfirmationChatContentBody(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ConfirmationBindingBody(BaseModel):
+    user_id: str
+    conversation_id: str
+    tool: str
+    arguments: dict[str, object]
+    initiating_context: list[ConfirmationChatContentBody]
+
+
+class ConfirmationDecisionBody(BaseModel):
+    decision: Literal["accept", "reject"]
+    binding: ConfirmationBindingBody
 
 
 def create_app(
@@ -76,6 +98,56 @@ def create_app(
             raise HTTPException(status_code=404, detail="Skill not found")
         metadata, event = change
         return {"skill": asdict(metadata), "event": asdict(event)}
+
+    @app.get("/api/settings/confirmations")
+    async def pending_confirmations() -> dict[str, object]:
+        return {
+            "confirmations": [
+                asdict(confirmation)
+                for confirmation in agent_core.list_pending_confirmations()
+            ]
+        }
+
+    @app.post("/api/settings/confirmations/{confirmation_id}/decision")
+    async def decide_confirmation(
+        confirmation_id: str, body: ConfirmationDecisionBody
+    ) -> dict[str, object]:
+        binding = ConfirmationBinding(
+            user_id=body.binding.user_id,
+            conversation_id=body.binding.conversation_id,
+            tool=body.binding.tool,
+            arguments=body.binding.arguments,
+            initiating_context=tuple(
+                ChatContent(role=item.role, content=item.content)
+                for item in body.binding.initiating_context
+            ),
+        )
+        try:
+            turn = await agent_core.decide_confirmation(
+                ConfirmationDecision(
+                    confirmation_id=confirmation_id,
+                    binding=binding,
+                    decision=body.decision,
+                )
+            )
+        except ConfirmationError as error:
+            status_code = {
+                "not_found": 404,
+                "expired": 410,
+                "binding_mismatch": 409,
+                "already_decided": 409,
+            }.get(error.code, 409)
+            raise HTTPException(
+                status_code=status_code,
+                detail="Confirmation is unavailable for this decision",
+            ) from error
+        return {"turn": asdict(turn)}
+
+    @app.get("/api/settings/audit")
+    async def audit_history() -> dict[str, object]:
+        return {
+            "events": [asdict(event) for event in agent_core.list_audit_events()]
+        }
 
     @app.post("/api/chat")
     async def chat(body: ChatRequestBody) -> dict[str, object]:

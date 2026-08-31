@@ -1,15 +1,32 @@
 """Product-neutral values exchanged through the Agent Core facade."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from .confirmations import PendingConfirmation
 
 
 ChatRole = Literal["user", "assistant"]
-StopReason = Literal["final", "step_limit", "tool_call_limit"]
+StopReason = Literal[
+    "final",
+    "clarification",
+    "confirmation_pending",
+    "confirmation_accepted",
+    "confirmation_rejected",
+    "step_limit",
+    "tool_call_limit",
+]
 EventType = Literal[
     "turn_started",
     "provider_started",
     "provider_completed",
+    "action_decided",
+    "confirmation_pending",
+    "confirmation_accepted",
+    "confirmation_rejected",
     "tool_execution_started",
     "tool_execution_completed",
     "tool_execution_failed",
@@ -33,6 +50,8 @@ class TurnRequest:
     conversation_id: str
     messages: tuple[ChatContent, ...]
     requested_skills: tuple[str, ...] = ()
+    user_id: str = "local-user"
+    granted_permissions: tuple[str, ...] = ("*",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,3 +68,4 @@ class TurnResult:
     chat_content: ChatContent
     stop_reason: StopReason
     events: tuple[RuntimeEvent, ...]
+    confirmation: PendingConfirmation | None = None

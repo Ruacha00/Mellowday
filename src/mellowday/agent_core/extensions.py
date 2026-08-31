@@ -1,6 +1,9 @@
 """Stable, product-neutral extension contracts for Agent Core."""
 
+from __future__ import annotations
+
 import re
+from copy import deepcopy
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias, cast
@@ -89,6 +92,7 @@ class ToolCall:
     id: str
     name: str
     arguments: Mapping[str, object] | None
+    intent_clarity: Literal["clear", "ambiguous"] = "clear"
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +103,24 @@ class ToolExecutionResult:
     result: object | None = None
     error: str | None = None
     detail: str | None = None
+    undo: UndoMetadata | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UndoMetadata:
+    tool: str
+    arguments: dict[str, object]
+
+    def __post_init__(self) -> None:
+        if _TOOL_NAME.fullmatch(self.tool) is None:
+            raise ValueError(f"invalid undo Tool name: {self.tool!r}")
+        object.__setattr__(self, "arguments", deepcopy(self.arguments))
+
+
+@dataclass(frozen=True, slots=True)
+class ToolOutcome:
+    value: object
+    undo: UndoMetadata | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,5 +251,7 @@ __all__ = [
     "ToolExecutionResult",
     "ToolExecutor",
     "ToolMetadata",
+    "ToolOutcome",
+    "UndoMetadata",
     "validate_tool_arguments",
 ]

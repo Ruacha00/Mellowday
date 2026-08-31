@@ -99,6 +99,7 @@ def test_tool_runs_through_a_complete_public_facade_turn() -> None:
         "turn_started",
         "provider_started",
         "provider_completed",
+        "action_decided",
         "tool_execution_started",
         "tool_execution_completed",
         "provider_started",

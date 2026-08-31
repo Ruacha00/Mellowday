@@ -12,6 +12,10 @@ const toolList = document.querySelector("#tool-list");
 const skillList = document.querySelector("#skill-list");
 const toolCount = document.querySelector("#tool-count");
 const skillCount = document.querySelector("#skill-count");
+const confirmationList = document.querySelector("#confirmation-list");
+const confirmationCount = document.querySelector("#confirmation-count");
+const auditList = document.querySelector("#audit-list");
+const auditCount = document.querySelector("#audit-count");
 
 function appendMessage(role, content) {
   const item = document.createElement("li");
@@ -197,16 +201,171 @@ function renderSkills(skills) {
 }
 
 async function loadCapabilities() {
-  settingsStatus.textContent = "Loading registered capabilities.";
+  const response = await fetch("/api/settings/capabilities");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const capabilities = await response.json();
+  renderTools(capabilities.tools);
+  renderSkills(capabilities.skills);
+}
+
+function renderConfirmations(confirmations) {
+  confirmationList.replaceChildren();
+  confirmationCount.textContent = String(confirmations.length);
+
+  if (confirmations.length === 0) {
+    addText(confirmationList, "empty-capability", "No confirmations are waiting.");
+    return;
+  }
+
+  for (const confirmation of confirmations) {
+    const card = document.createElement("article");
+    card.className = "capability-card confirmation-card";
+
+    const heading = document.createElement("div");
+    heading.className = "confirmation-heading";
+    const tool = document.createElement("code");
+    tool.className = "capability-name";
+    tool.textContent = confirmation.binding.tool;
+    const expiry = document.createElement("time");
+    expiry.className = "confirmation-expiry";
+    expiry.dateTime = new Date(confirmation.expires_at * 1000).toISOString();
+    expiry.textContent = `Expires ${new Date(
+      confirmation.expires_at * 1000,
+    ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    heading.append(tool, expiry);
+
+    const context = document.createElement("p");
+    context.className = "confirmation-context";
+    context.textContent = `Conversation ${confirmation.binding.conversation_id}`;
+
+    const argumentsDetail = document.createElement("details");
+    argumentsDetail.className = "schema-detail";
+    const summary = document.createElement("summary");
+    summary.textContent = "Normalized arguments";
+    const argumentsText = document.createElement("pre");
+    argumentsText.textContent = JSON.stringify(
+      confirmation.binding.arguments,
+      null,
+      2,
+    );
+    argumentsDetail.append(summary, argumentsText);
+
+    const actions = document.createElement("div");
+    actions.className = "confirmation-actions";
+    for (const [decision, label] of [
+      ["reject", "Reject"],
+      ["accept", "Accept"],
+    ]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `decision-button decision-${decision}`;
+      button.textContent = label;
+      button.setAttribute(
+        "aria-label",
+        `${label} ${confirmation.binding.tool} confirmation`,
+      );
+      button.addEventListener("click", async () => {
+        for (const control of actions.querySelectorAll("button")) {
+          control.disabled = true;
+        }
+        settingsStatus.textContent = "Applying confirmation decision.";
+        try {
+          const response = await fetch(
+            `/api/settings/confirmations/${encodeURIComponent(confirmation.id)}/decision`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                decision,
+                binding: confirmation.binding,
+              }),
+            },
+          );
+          if (!response.ok) {
+            throw new Error(`Request failed with ${response.status}`);
+          }
+          const result = await response.json();
+          if (result.turn.chat_content.content) {
+            appendMessage(
+              result.turn.chat_content.role,
+              result.turn.chat_content.content,
+            );
+          }
+          settingsStatus.textContent = `Confirmation ${
+            decision === "accept" ? "accepted" : "rejected"
+          }.`;
+          await Promise.all([loadConfirmations(), loadAuditHistory()]);
+        } catch (error) {
+          settingsStatus.textContent = "The confirmation decision could not be applied.";
+          for (const control of actions.querySelectorAll("button")) {
+            control.disabled = false;
+          }
+        }
+      });
+      actions.append(button);
+    }
+
+    card.append(heading, context, argumentsDetail, actions);
+    confirmationList.append(card);
+  }
+}
+
+async function loadConfirmations() {
+  const response = await fetch("/api/settings/confirmations");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderConfirmations(payload.confirmations);
+}
+
+function renderAuditHistory(events) {
+  auditList.replaceChildren();
+  auditCount.textContent = String(events.length);
+  const recent = events.slice(-10).reverse();
+
+  if (recent.length === 0) {
+    const item = document.createElement("li");
+    item.className = "empty-capability";
+    item.textContent = "No runtime events have been recorded.";
+    auditList.append(item);
+    return;
+  }
+
+  for (const event of recent) {
+    const item = document.createElement("li");
+    item.className = "audit-event";
+    const type = document.createElement("code");
+    type.textContent = event.type;
+    const detail = document.createElement("span");
+    detail.textContent = event.details.tool || event.conversation_id || "Agent Core";
+    const occurred = document.createElement("time");
+    occurred.dateTime = new Date(event.occurred_at * 1000).toISOString();
+    occurred.textContent = new Date(event.occurred_at * 1000).toLocaleTimeString(
+      [],
+      { hour: "2-digit", minute: "2-digit", second: "2-digit" },
+    );
+    item.append(type, detail, occurred);
+    auditList.append(item);
+  }
+}
+
+async function loadAuditHistory() {
+  const response = await fetch("/api/settings/audit");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderAuditHistory(payload.events);
+}
+
+async function loadSettings() {
+  settingsStatus.textContent = "Loading Settings data.";
   try {
-    const response = await fetch("/api/settings/capabilities");
-    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
-    const capabilities = await response.json();
-    renderTools(capabilities.tools);
-    renderSkills(capabilities.skills);
-    settingsStatus.textContent = "Capability metadata is up to date.";
+    await Promise.all([
+      loadCapabilities(),
+      loadConfirmations(),
+      loadAuditHistory(),
+    ]);
+    settingsStatus.textContent = "Settings data is up to date.";
   } catch (error) {
-    settingsStatus.textContent = "Capability metadata is unavailable.";
+    settingsStatus.textContent = "Settings data is unavailable.";
   }
 }
 
@@ -214,7 +373,7 @@ settingsToggle.addEventListener("click", () => {
   conversation.hidden = true;
   settingsPanel.hidden = false;
   settingsToggle.setAttribute("aria-expanded", "true");
-  loadCapabilities();
+  loadSettings();
 });
 
 settingsClose.addEventListener("click", () => {

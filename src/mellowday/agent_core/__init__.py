@@ -1,6 +1,19 @@
 """Public Agent Core interface."""
 
+from .actions import (
+    ExecutionContext,
+    IntentClarity,
+    PermissionDecision,
+    PermissionEngine,
+)
 from .facade import AgentCore
+from .confirmations import (
+    ConfirmationBinding,
+    ConfirmationDecision,
+    ConfirmationDecisionValue,
+    ConfirmationError,
+    PendingConfirmation,
+)
 from .extensions import (
     LoadedSkill,
     RiskClassification,
@@ -13,6 +26,8 @@ from .extensions import (
     ToolExecutionResult,
     ToolExecutor,
     ToolMetadata,
+    ToolOutcome,
+    UndoMetadata,
 )
 from .provider import FakeProvider, ModelProvider, ProviderReply, ProviderRequest
 from .types import ChatContent, EventType, RuntimeEvent, TurnRequest, TurnResult
@@ -20,10 +35,19 @@ from .types import ChatContent, EventType, RuntimeEvent, TurnRequest, TurnResult
 __all__ = [
     "AgentCore",
     "ChatContent",
+    "ConfirmationBinding",
+    "ConfirmationDecision",
+    "ConfirmationDecisionValue",
+    "ConfirmationError",
+    "ExecutionContext",
     "EventType",
     "FakeProvider",
     "LoadedSkill",
     "ModelProvider",
+    "IntentClarity",
+    "PermissionDecision",
+    "PermissionEngine",
+    "PendingConfirmation",
     "ProviderReply",
     "ProviderRequest",
     "RiskClassification",
@@ -37,6 +61,8 @@ __all__ = [
     "ToolExecutionResult",
     "ToolExecutor",
     "ToolMetadata",
+    "ToolOutcome",
     "TurnRequest",
     "TurnResult",
+    "UndoMetadata",
 ]

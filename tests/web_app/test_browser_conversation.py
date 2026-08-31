@@ -8,7 +8,14 @@ import uvicorn
 from fastapi import FastAPI
 from playwright.sync_api import expect, sync_playwright
 
-from mellowday.agent_core import FakeProvider, Skill, Tool
+from mellowday.agent_core import (
+    FakeProvider,
+    ProviderReply,
+    ProviderRequest,
+    Skill,
+    Tool,
+    ToolCall,
+)
 from mellowday.web_app import create_app
 
 
@@ -115,4 +122,84 @@ def test_user_can_inspect_and_manage_capabilities_from_settings() -> None:
         enablement.uncheck()
         expect(page.get_by_text("Disabled", exact=True)).to_be_visible()
         assert loads == []
+        browser.close()
+
+
+def test_user_can_reject_pending_confirmation_from_settings() -> None:
+    executions: list[dict[str, object]] = []
+
+    class ConfirmationProvider:
+        name = "confirmation-script"
+
+        def __init__(self) -> None:
+            self.replies = iter(
+                (
+                    ProviderReply(
+                        content="This erases the note permanently. Continue?",
+                        tool_calls=(
+                            ToolCall(
+                                "call-delete",
+                                "erase_note",
+                                {"note_id": "note-1"},
+                            ),
+                        ),
+                    ),
+                    ProviderReply(content="Okay, I left the note where it was."),
+                )
+            )
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            return next(self.replies)
+
+    async def erase_note(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        executions.append(arguments)
+        return {"conversation_id": conversation_id}
+
+    app = create_app(
+        provider=ConfirmationProvider(),
+        tools=(
+            Tool(
+                name="erase_note",
+                description="Permanently erase one note.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"note_id": {"type": "string"}},
+                    "required": ["note_id"],
+                },
+                executor=erase_note,
+                side_effect="irreversible",
+                risk="high",
+            ),
+        ),
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        page.get_by_label("Message").fill("Erase note one.")
+        page.get_by_role("button", name="Send").click()
+        expect(page.locator('[data-role="assistant"] p').last).to_have_text(
+            "This erases the note permanently. Continue?"
+        )
+
+        page.get_by_role("button", name="Settings").click()
+        expect(page.get_by_role("heading", name="Pending confirmations")).to_be_visible()
+        expect(
+            page.locator("#confirmation-list").get_by_text(
+                "erase_note", exact=True
+            )
+        ).to_be_visible()
+        page.get_by_role("button", name="Reject erase_note confirmation").click()
+        expect(page.locator("#settings-status")).to_have_text(
+            "Confirmation rejected."
+        )
+
+        page.get_by_role("button", name="Back to conversation").click()
+        expect(page.locator('[data-role="assistant"] p').last).to_have_text(
+            "Okay, I left the note where it was."
+        )
+        assert executions == []
         browser.close()

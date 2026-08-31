@@ -3,8 +3,19 @@
 import json
 import time
 from collections.abc import Callable, Iterable
+from copy import deepcopy
+from dataclasses import asdict
 from pathlib import Path
+from typing import Literal
 
+from .actions import ExecutionContext, PermissionEngine
+from .confirmations import (
+    ConfirmationBinding,
+    ConfirmationDecision,
+    ConfirmationResolution,
+    ConfirmationStore,
+    PendingConfirmation,
+)
 from .extensions import (
     LoadedSkill,
     Skill,
@@ -14,6 +25,8 @@ from .extensions import (
     ToolCall,
     ToolExecutionResult,
     ToolMetadata,
+    ToolOutcome,
+    UndoMetadata,
     validate_tool_arguments,
 )
 from .provider import ModelProvider, ProviderRequest
@@ -37,6 +50,7 @@ class AgentCore:
         skill_state_path: str | Path | None = None,
         max_provider_steps: int = 8,
         max_tool_calls: int = 16,
+        confirmation_ttl_seconds: float = 600,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if max_provider_steps < 1:
@@ -44,10 +58,13 @@ class AgentCore:
         if max_tool_calls < 0:
             raise ValueError("max_tool_calls must not be negative")
         self._provider = provider
+        self._permission_engine = PermissionEngine()
+        self._confirmations = ConfirmationStore(confirmation_ttl_seconds)
         self._clock = clock
         self._max_provider_steps = max_provider_steps
         self._max_tool_calls = max_tool_calls
         self._event_sequence = 0
+        self._audit_events: list[RuntimeEvent] = []
         self._tools: dict[str, Tool] = {}
         for tool in tools:
             if tool.name in self._tools:
@@ -80,6 +97,77 @@ class AgentCore:
             for name, skill in self._skills.items()
         )
 
+    def list_pending_confirmations(self) -> tuple[PendingConfirmation, ...]:
+        """Return pending confirmations without exposing executable state."""
+
+        return self._confirmations.pending(now=self._clock())
+
+    def list_audit_events(self) -> tuple[RuntimeEvent, ...]:
+        """Return neutral action and runtime history in sequence order."""
+
+        return deepcopy(tuple(self._audit_events))
+
+    async def decide_confirmation(
+        self, decision: ConfirmationDecision
+    ) -> TurnResult:
+        """Accept or reject one bound confirmation exactly once."""
+
+        resolution = self._confirmations.decide(decision, now=self._clock())
+        binding = resolution.pending.binding
+        events: list[RuntimeEvent] = []
+
+        def emit(event_type: EventType, **details: object) -> None:
+            events.append(
+                self._runtime_event(
+                    event_type,
+                    conversation_id=binding.conversation_id,
+                    **details,
+                )
+            )
+
+        if resolution.decision == "accept":
+            emit(
+                "confirmation_accepted",
+                confirmation_id=resolution.pending.id,
+                tool=binding.tool,
+            )
+            tool_result = await self._execute_confirmed_tool(resolution, emit)
+            stop_reason: StopReason = "confirmation_accepted"
+        else:
+            emit(
+                "confirmation_rejected",
+                confirmation_id=resolution.pending.id,
+                tool=binding.tool,
+            )
+            tool_result = ToolExecutionResult(
+                call_id=resolution.call_id,
+                name=binding.tool,
+                ok=False,
+                error="user_rejected",
+            )
+            stop_reason = "confirmation_rejected"
+
+        emit("provider_started", provider=self._provider.name)
+        reply = await self._provider.complete(
+            ProviderRequest(
+                messages=binding.initiating_context,
+                tools=self.list_tools(),
+                tool_results=(tool_result,),
+                skills=tuple(
+                    metadata
+                    for metadata in self.list_skills()
+                    if metadata.enabled
+                ),
+            )
+        )
+        emit("provider_completed", provider=self._provider.name)
+        emit("turn_completed", stop_reason=stop_reason)
+        return TurnResult(
+            chat_content=ChatContent(role="assistant", content=reply.content.strip()),
+            stop_reason=stop_reason,
+            events=tuple(events),
+        )
+
     def set_skill_enabled(
         self, name: str, enabled: bool
     ) -> tuple[SkillMetadata, RuntimeEvent] | None:
@@ -101,6 +189,11 @@ class AgentCore:
 
     async def run_turn(self, request: TurnRequest) -> TurnResult:
         conversation_id = request.conversation_id.strip()
+        execution_context = ExecutionContext(
+            user_id=request.user_id.strip(),
+            conversation_id=conversation_id,
+            granted_permissions=request.granted_permissions,
+        )
         messages = tuple(
             ChatContent(role=message.role, content=message.content.strip())
             for message in request.messages
@@ -174,9 +267,34 @@ class AgentCore:
                     )
                     continue
                 handled_call_ids.add(call.id)
-                tool_results.append(
-                    await self._execute_tool(call, conversation_id, emit)
+                outcome = await self._execute_tool(
+                    call, execution_context, messages, emit
                 )
+                if outcome == "clarify":
+                    emit("turn_completed", stop_reason="clarification")
+                    return TurnResult(
+                        chat_content=ChatContent(
+                            role="assistant", content=reply.content.strip()
+                        ),
+                        stop_reason="clarification",
+                        events=tuple(events),
+                    )
+                if isinstance(outcome, PendingConfirmation):
+                    emit(
+                        "confirmation_pending",
+                        confirmation_id=outcome.id,
+                        tool=outcome.binding.tool,
+                        expires_at=outcome.expires_at,
+                    )
+                    return TurnResult(
+                        chat_content=ChatContent(
+                            role="assistant", content=reply.content.strip()
+                        ),
+                        stop_reason="confirmation_pending",
+                        events=tuple(events),
+                        confirmation=outcome,
+                    )
+                tool_results.append(outcome)
 
         chat_content = ChatContent(role="assistant", content=reply.content.strip())
         emit("turn_completed", stop_reason="final")
@@ -194,13 +312,15 @@ class AgentCore:
         **details: object,
     ) -> RuntimeEvent:
         self._event_sequence += 1
-        return RuntimeEvent(
+        event = RuntimeEvent(
             sequence=self._event_sequence,
             type=event_type,
             occurred_at=self._clock(),
             conversation_id=conversation_id,
             details=details,
         )
+        self._audit_events.append(deepcopy(event))
+        return event
 
     @staticmethod
     def _limit_result(
@@ -221,10 +341,10 @@ class AgentCore:
     async def _execute_tool(
         self,
         call: ToolCall,
-        conversation_id: str,
+        context: ExecutionContext,
+        initiating_context: tuple[ChatContent, ...],
         emit: Callable[..., None],
-    ) -> ToolExecutionResult:
-        emit("tool_execution_started", tool=call.name, call_id=call.id)
+    ) -> ToolExecutionResult | PendingConfirmation | Literal["clarify"]:
         tool = self._tools.get(call.name)
         if tool is None:
             result = ToolExecutionResult(
@@ -240,9 +360,32 @@ class AgentCore:
                 error=result.error,
             )
             return result
+        call_context = ExecutionContext(
+            user_id=context.user_id,
+            conversation_id=context.conversation_id,
+            granted_permissions=context.granted_permissions,
+            intent_clarity=call.intent_clarity,
+        )
+        decision = self._permission_engine.decide(tool.metadata(), call_context)
+        emit("action_decided", tool=call.name, call_id=call.id, decision=decision)
+        if decision == "clarify":
+            return "clarify"
+        if decision == "deny":
+            result = ToolExecutionResult(
+                call_id=call.id,
+                name=call.name,
+                ok=False,
+                error="permission_denied",
+            )
+            emit(
+                "tool_execution_failed",
+                tool=call.name,
+                call_id=call.id,
+                error=result.error,
+            )
+            return result
         try:
             arguments = validate_tool_arguments(tool.input_schema, call.arguments)
-            value = await tool.executor(arguments, conversation_id)
         except ToolArgumentsError as error:
             result = ToolExecutionResult(
                 call_id=call.id,
@@ -258,6 +401,22 @@ class AgentCore:
                 error=result.error,
             )
             return result
+        if decision == "confirm":
+            return self._confirmations.create(
+                binding=ConfirmationBinding(
+                    user_id=context.user_id,
+                    conversation_id=context.conversation_id,
+                    tool=tool.name,
+                    arguments=arguments,
+                    initiating_context=initiating_context,
+                ),
+                call_id=call.id,
+                granted_permissions=context.granted_permissions,
+                now=self._clock(),
+            )
+        emit("tool_execution_started", tool=call.name, call_id=call.id)
+        try:
+            value = await tool.executor(arguments, context.conversation_id)
         except Exception as error:  # noqa: BLE001 - extension failures are normalized
             result = ToolExecutionResult(
                 call_id=call.id,
@@ -273,14 +432,126 @@ class AgentCore:
                 error=result.error,
             )
             return result
+        result_value, undo = self._normalize_tool_outcome(value)
         result = ToolExecutionResult(
             call_id=call.id,
             name=call.name,
             ok=True,
-            result=value,
+            result=result_value,
+            undo=undo,
         )
-        emit("tool_execution_completed", tool=call.name, call_id=call.id)
+        completion_details: dict[str, object] = {
+            "tool": call.name,
+            "call_id": call.id,
+        }
+        if undo is not None:
+            completion_details["undo"] = asdict(undo)
+        emit("tool_execution_completed", **completion_details)
         return result
+
+    async def _execute_confirmed_tool(
+        self,
+        resolution: ConfirmationResolution,
+        emit: Callable[..., None],
+    ) -> ToolExecutionResult:
+        binding = resolution.pending.binding
+        tool = self._tools.get(binding.tool)
+        if tool is None:
+            result = ToolExecutionResult(
+                call_id=resolution.call_id,
+                name=binding.tool,
+                ok=False,
+                error="unknown_tool",
+            )
+            emit(
+                "tool_execution_failed",
+                tool=binding.tool,
+                call_id=resolution.call_id,
+                error=result.error,
+            )
+            return result
+        context = ExecutionContext(
+            user_id=binding.user_id,
+            conversation_id=binding.conversation_id,
+            granted_permissions=resolution.granted_permissions,
+        )
+        permission = self._permission_engine.decide(tool.metadata(), context)
+        if permission == "deny":
+            result = ToolExecutionResult(
+                call_id=resolution.call_id,
+                name=binding.tool,
+                ok=False,
+                error="permission_denied",
+            )
+            emit(
+                "tool_execution_failed",
+                tool=binding.tool,
+                call_id=resolution.call_id,
+                error=result.error,
+            )
+            return result
+        emit(
+            "tool_execution_started",
+            tool=binding.tool,
+            call_id=resolution.call_id,
+        )
+        try:
+            arguments = validate_tool_arguments(tool.input_schema, binding.arguments)
+            value = await tool.executor(arguments, binding.conversation_id)
+        except ToolArgumentsError as error:
+            result = ToolExecutionResult(
+                call_id=resolution.call_id,
+                name=binding.tool,
+                ok=False,
+                error="invalid_arguments",
+                detail=str(error),
+            )
+            emit(
+                "tool_execution_failed",
+                tool=binding.tool,
+                call_id=resolution.call_id,
+                error=result.error,
+            )
+            return result
+        except Exception as error:  # noqa: BLE001 - extension failures are normalized
+            result = ToolExecutionResult(
+                call_id=resolution.call_id,
+                name=binding.tool,
+                ok=False,
+                error="executor_error",
+                detail=str(error),
+            )
+            emit(
+                "tool_execution_failed",
+                tool=binding.tool,
+                call_id=resolution.call_id,
+                error=result.error,
+            )
+            return result
+        result_value, undo = self._normalize_tool_outcome(value)
+        result = ToolExecutionResult(
+            call_id=resolution.call_id,
+            name=binding.tool,
+            ok=True,
+            result=result_value,
+            undo=undo,
+        )
+        completion_details: dict[str, object] = {
+            "tool": binding.tool,
+            "call_id": resolution.call_id,
+        }
+        if undo is not None:
+            completion_details["undo"] = asdict(undo)
+        emit("tool_execution_completed", **completion_details)
+        return result
+
+    @staticmethod
+    def _normalize_tool_outcome(
+        value: object,
+    ) -> tuple[object, UndoMetadata | None]:
+        if isinstance(value, ToolOutcome):
+            return value.value, value.undo
+        return value, None
 
     def _load_skill(
         self,

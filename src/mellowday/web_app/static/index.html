@@ -89,6 +89,30 @@
 
         <p id="settings-status" class="settings-status" role="status"></p>
 
+        <div class="settings-operations">
+          <section class="capability-section" aria-labelledby="confirmations-title">
+            <div class="capability-section-heading">
+              <div>
+                <p class="operation-kicker">Decision queue</p>
+                <h3 id="confirmations-title">Pending confirmations</h3>
+              </div>
+              <span id="confirmation-count" class="count-mark">0</span>
+            </div>
+            <div id="confirmation-list" class="capability-list"></div>
+          </section>
+
+          <section class="capability-section" aria-labelledby="audit-title">
+            <div class="capability-section-heading">
+              <div>
+                <p class="operation-kicker">Runtime record</p>
+                <h3 id="audit-title">Audit history</h3>
+              </div>
+              <span id="audit-count" class="count-mark">0</span>
+            </div>
+            <ol id="audit-list" class="audit-list"></ol>
+          </section>
+        </div>
+
         <div class="capability-columns">
           <section class="capability-section" aria-labelledby="tools-title">
             <div class="capability-section-heading">

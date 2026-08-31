@@ -3,7 +3,14 @@ from pathlib import Path
 
 from httpx import ASGITransport, AsyncClient
 
-from mellowday.agent_core import FakeProvider, Skill, Tool
+from mellowday.agent_core import (
+    FakeProvider,
+    ProviderReply,
+    ProviderRequest,
+    Skill,
+    Tool,
+    ToolCall,
+)
 from mellowday.web_app import create_app
 
 
@@ -153,3 +160,100 @@ def test_settings_persists_local_skill_enablement(tmp_path: Path) -> None:
         assert capabilities.json()["skills"] == [payload["skill"]]
 
     asyncio.run(disable_and_restart())
+
+
+def test_settings_inspects_and_accepts_pending_confirmation() -> None:
+    executions: list[dict[str, object]] = []
+
+    class ConfirmationProvider:
+        name = "confirmation-script"
+
+        def __init__(self) -> None:
+            self.replies = iter(
+                (
+                    ProviderReply(
+                        content="This erases the note permanently. Continue?",
+                        tool_calls=(
+                            ToolCall(
+                                "call-delete",
+                                "erase_note",
+                                {"note_id": "note-1"},
+                            ),
+                        ),
+                    ),
+                    ProviderReply(content="The note is gone."),
+                )
+            )
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            return next(self.replies)
+
+    async def erase_note(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        executions.append(arguments)
+        return {"conversation_id": conversation_id}
+
+    async def exercise_boundary() -> None:
+        app = create_app(
+            provider=ConfirmationProvider(),
+            tools=(
+                Tool(
+                    name="erase_note",
+                    description="Permanently erase one note.",
+                    input_schema={
+                        "type": "object",
+                        "properties": {"note_id": {"type": "string"}},
+                        "required": ["note_id"],
+                    },
+                    executor=erase_note,
+                    side_effect="irreversible",
+                    risk="high",
+                ),
+            ),
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            chat = await client.post(
+                "/api/chat",
+                json={
+                    "conversation_id": "conversation-1",
+                    "content": "Erase note one.",
+                },
+            )
+            pending = await client.get("/api/settings/confirmations")
+            confirmation = chat.json()["confirmation"]
+            decided = await client.post(
+                f"/api/settings/confirmations/{confirmation['id']}/decision",
+                json={
+                    "decision": "accept",
+                    "binding": confirmation["binding"],
+                },
+            )
+            audit = await client.get("/api/settings/audit")
+
+        assert chat.status_code == 200
+        assert chat.json()["stop_reason"] == "confirmation_pending"
+        assert pending.status_code == 200
+        assert pending.json() == {"confirmations": [confirmation]}
+        assert confirmation["binding"] == {
+            "user_id": "local-user",
+            "conversation_id": "conversation-1",
+            "tool": "erase_note",
+            "arguments": {"note_id": "note-1"},
+            "initiating_context": [
+                {"role": "user", "content": "Erase note one."}
+            ],
+        }
+        assert decided.status_code == 200
+        assert decided.json()["turn"]["stop_reason"] == "confirmation_accepted"
+        assert decided.json()["turn"]["chat_content"]["content"] == (
+            "The note is gone."
+        )
+        assert executions == [{"note_id": "note-1"}]
+        event_types = [event["type"] for event in audit.json()["events"]]
+        assert "confirmation_pending" in event_types
+        assert "confirmation_accepted" in event_types
+        assert "tool_execution_completed" in event_types
+
+    asyncio.run(exercise_boundary())
