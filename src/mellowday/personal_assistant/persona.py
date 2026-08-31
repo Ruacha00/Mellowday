@@ -35,6 +35,28 @@ class Persona:
             )
         )
 
+    def provider_failure_chat_content(self, code: str) -> str:
+        """Render truthful Chat Content when no model reply is available."""
+
+        details = {
+            "not_configured": (
+                "no model Provider is selected. Please choose one in Settings"
+            ),
+            "authentication": (
+                "the configured model Provider rejected its credentials. "
+                "Please check Provider Settings"
+            ),
+            "rate_limited": "the configured model Provider is rate-limited",
+            "timeout": "the configured model Provider timed out",
+            "unavailable": "the configured model Provider is unavailable",
+            "request_rejected": "the configured model Provider rejected the request",
+            "invalid_response": (
+                "the configured model Provider returned an invalid response"
+            ),
+        }
+        detail = details.get(code, "the configured model Provider failed")
+        return f"I can't answer reliably right now because {detail}."
+
 
 DEFAULT_PERSONA = Persona(
     name="Mellowday",

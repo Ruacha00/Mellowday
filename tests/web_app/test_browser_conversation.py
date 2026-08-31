@@ -190,7 +190,9 @@ def test_user_can_manage_model_providers_from_settings(tmp_path: Path) -> None:
             json: dict[str, object] | None,
             timeout: float,
         ) -> ProviderTransportResponse:
-            return ProviderTransportResponse(status_code=200, payload={"data": []})
+            return ProviderTransportResponse(
+                status_code=200, payload={"data": [{"id": "first-model"}]}
+            )
 
     app = create_app(
         conversation_database_path=tmp_path / "mellowday.sqlite3",

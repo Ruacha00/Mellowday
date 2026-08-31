@@ -64,6 +64,7 @@ class ProviderReply:
 class ProviderRequest:
     messages: tuple[ChatContent, ...]
     tools: tuple[ToolMetadata, ...] = ()
+    assistant_tool_calls: tuple[ToolCall, ...] = ()
     tool_results: tuple[ToolExecutionResult, ...] = ()
     skills: tuple[SkillMetadata, ...] = ()
     loaded_skills: tuple[LoadedSkill, ...] = ()

@@ -569,6 +569,11 @@ function renderProviders(providers) {
             { method: "POST" },
           );
           if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+          const result = await response.json();
+          if (!result.valid) {
+            settingsStatus.textContent = `${provider.name} validation failed: ${result.failure.code}.`;
+            return;
+          }
           settingsStatus.textContent = `${provider.name} validated.`;
         } catch (error) {
           settingsStatus.textContent = `${provider.name} could not be validated.`;

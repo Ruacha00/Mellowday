@@ -161,6 +161,9 @@ def create_app(
         history_message_limit=history_message_limit,
         history_character_limit=history_character_limit,
         system_instructions_provider=lambda: persona_store.get().chat_instructions(),
+        provider_failure_content_provider=(
+            lambda error: persona_store.get().provider_failure_chat_content(error.code)
+        ),
     )
     app = FastAPI(title="Mellowday", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=_STATIC_DIRECTORY), name="static")

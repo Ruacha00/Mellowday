@@ -1,6 +1,16 @@
 import asyncio
 
-from mellowday.agent_core import AgentCore, ChatContent, FakeProvider, TurnRequest
+from mellowday.agent_core import (
+    AgentCore,
+    ChatContent,
+    ConfirmationDecision,
+    FakeProvider,
+    ProviderReply,
+    ProviderRequest,
+    Tool,
+    ToolCall,
+    TurnRequest,
+)
 from mellowday.agent_core.openai_compatible import ProviderFailure
 
 
@@ -46,7 +56,12 @@ def test_provider_failure_returns_truthful_chat_and_safe_diagnostics() -> None:
                 "authentication", retryable=False, attempts=1
             )
 
-    core = AgentCore(provider=FailingProvider())
+    core = AgentCore(
+        provider=FailingProvider(),
+        provider_failure_content_provider=(
+            lambda _error: "The configured Provider credentials were rejected."
+        ),
+    )
 
     result = asyncio.run(
         core.run_turn(
@@ -60,10 +75,7 @@ def test_provider_failure_returns_truthful_chat_and_safe_diagnostics() -> None:
     assert result.stop_reason == "provider_error"
     assert result.chat_content == ChatContent(
         role="assistant",
-        content=(
-            "I couldn't reach the configured model Provider, so I can't "
-            "answer that reliably right now. Please check Settings and try again."
-        ),
+        content="The configured Provider credentials were rejected.",
     )
     assert [event.type for event in result.events] == [
         "turn_started",
@@ -77,3 +89,65 @@ def test_provider_failure_returns_truthful_chat_and_safe_diagnostics() -> None:
         "retryable": False,
         "attempts": 1,
     }
+
+
+def test_provider_failure_after_confirmation_is_normalized() -> None:
+    class ConfirmationThenFailureProvider:
+        name = "configured-provider"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def complete(self, _request: ProviderRequest) -> ProviderReply:
+            self.calls += 1
+            if self.calls == 1:
+                return ProviderReply(
+                    content="Delete it?",
+                    tool_calls=(ToolCall("call-1", "delete_note", {}),),
+                )
+            raise ProviderFailure("timeout", retryable=True, attempts=3)
+
+    async def delete_note(
+        _arguments: dict[str, object], _conversation_id: str
+    ) -> dict[str, bool]:
+        return {"deleted": True}
+
+    provider = ConfirmationThenFailureProvider()
+    core = AgentCore(
+        provider=provider,
+        tools=(
+            Tool(
+                name="delete_note",
+                description="Delete a note permanently.",
+                input_schema={"type": "object", "properties": {}},
+                executor=delete_note,
+                side_effect="irreversible",
+                risk="high",
+            ),
+        ),
+        provider_failure_content_provider=lambda _error: "The Provider timed out.",
+    )
+
+    pending_turn = asyncio.run(
+        core.run_turn(
+            TurnRequest(
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Delete it"),),
+            )
+        )
+    )
+    assert pending_turn.confirmation is not None
+    resumed = asyncio.run(
+        core.decide_confirmation(
+            ConfirmationDecision(
+                confirmation_id=pending_turn.confirmation.id,
+                binding=pending_turn.confirmation.binding,
+                decision="accept",
+            )
+        )
+    )
+
+    assert resumed.stop_reason == "provider_error"
+    assert resumed.chat_content.content == "The Provider timed out."
+    assert resumed.events[-2].type == "provider_failed"
+    assert resumed.events[-2].details["code"] == "timeout"

@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from mellowday.agent_core import FakeProvider, ProviderReply, ProviderRequest
+from mellowday.agent_core import ProviderFailure, ProviderReply, ProviderRequest
 from mellowday.agent_core.openai_compatible import (
     OpenAICompatibleConfig,
     OpenAICompatibleProvider,
@@ -232,19 +232,24 @@ class SelectedProvider:
     ) -> None:
         self._store = store
         self._transport = transport
-        self._fallback = FakeProvider()
+        self._active_configuration: ProviderConfiguration | None = None
+        self._active_provider: OpenAICompatibleProvider | None = None
 
     @property
     def name(self) -> str:
         selected = self._store.selected()
-        return selected.name if selected is not None else self._fallback.name
+        return selected.name if selected is not None else "not-configured"
 
     async def complete(self, request: ProviderRequest) -> ProviderReply:
         selected = self._store.selected()
         if selected is None:
-            return await self._fallback.complete(request)
-        provider = build_openai_compatible_provider(selected, self._transport)
-        return await provider.complete(request)
+            raise ProviderFailure("not_configured", retryable=False, attempts=0)
+        if selected != self._active_configuration or self._active_provider is None:
+            self._active_configuration = selected
+            self._active_provider = build_openai_compatible_provider(
+                selected, self._transport
+            )
+        return await self._active_provider.complete(request)
 
 
 def build_openai_compatible_provider(

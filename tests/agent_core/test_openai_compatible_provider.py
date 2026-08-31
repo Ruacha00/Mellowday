@@ -1,6 +1,14 @@
 import asyncio
 
-from mellowday.agent_core import ChatContent, ProviderRequest
+from mellowday.agent_core import (
+    ChatContent,
+    LoadedSkill,
+    ProviderRequest,
+    SkillMetadata,
+    ToolCall,
+    ToolExecutionResult,
+    ToolMetadata,
+)
 from mellowday.agent_core.openai_compatible import (
     OpenAICompatibleConfig,
     OpenAICompatibleProvider,
@@ -227,3 +235,89 @@ def test_malformed_success_payload_is_normalized_as_invalid_response() -> None:
         assert error.attempts == 1
     else:
         raise AssertionError("ProviderFailure was not raised")
+
+
+def test_openai_request_preserves_tool_and_skill_contracts() -> None:
+    transport = RecordedTransport(
+        (
+            ProviderTransportResponse(
+                status_code=200,
+                payload={
+                    "choices": [
+                        {
+                            "finish_reason": "tool_calls",
+                            "message": {
+                                "content": "",
+                                "tool_calls": [
+                                    {
+                                        "id": "skill-call",
+                                        "function": {
+                                            "name": "mellowday_load_skill",
+                                            "arguments": '{"name":"concise"}',
+                                        },
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                },
+            ),
+        )
+    )
+    provider = OpenAICompatibleProvider(
+        OpenAICompatibleConfig(
+            name="Local model",
+            base_url="http://localhost:9000/v1",
+            model="chat-model",
+            api_key="local-secret",
+            max_retries=0,
+        ),
+        transport=transport,
+    )
+
+    reply = asyncio.run(
+        provider.complete(
+            ProviderRequest(
+                messages=(ChatContent(role="user", content="Save this"),),
+                tools=(
+                    ToolMetadata(
+                        name="save_note",
+                        description="Save a note.",
+                        input_schema={"type": "object", "properties": {}},
+                        permission_requirements=(),
+                        side_effect="reversible",
+                        risk="low",
+                    ),
+                ),
+                assistant_tool_calls=(
+                    ToolCall("call-1", "save_note", {"content": "Tea"}),
+                ),
+                tool_results=(
+                    ToolExecutionResult(
+                        call_id="call-1",
+                        name="save_note",
+                        ok=True,
+                        result={"note_id": "note-1"},
+                    ),
+                ),
+                skills=(SkillMetadata("concise", "Answer briefly.", True),),
+                loaded_skills=(
+                    LoadedSkill("already_loaded", "Use exact dates."),
+                ),
+            )
+        )
+    )
+
+    body = transport.requests[0]["json"]
+    assert isinstance(body, dict)
+    assert body["tools"][0]["function"]["name"] == "save_note"
+    assert body["tools"][1]["function"]["name"] == "mellowday_load_skill"
+    assert [message["role"] for message in body["messages"]] == [
+        "system",
+        "user",
+        "assistant",
+        "tool",
+    ]
+    assert "Use exact dates." in body["messages"][0]["content"]
+    assert reply.selected_skills == ("concise",)
+    assert reply.tool_calls == ()

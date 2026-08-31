@@ -58,6 +58,8 @@ class AgentCore:
         history_message_limit: int = 40,
         history_character_limit: int = 12_000,
         system_instructions_provider: Callable[[], str] | None = None,
+        provider_failure_content_provider: Callable[[ProviderFailure], str]
+        | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if max_provider_steps < 1:
@@ -78,6 +80,7 @@ class AgentCore:
         self._history_message_limit = history_message_limit
         self._history_character_limit = history_character_limit
         self._system_instructions_provider = system_instructions_provider
+        self._provider_failure_content_provider = provider_failure_content_provider
         self._clock = clock
         self._max_provider_steps = max_provider_steps
         self._max_tool_calls = max_tool_calls
@@ -222,20 +225,34 @@ class AgentCore:
             stop_reason = "confirmation_rejected"
 
         emit("provider_started", provider=self._provider.name)
-        reply = await self._provider.complete(
-            ProviderRequest(
-                messages=binding.initiating_context,
-                system_instructions=self._system_instructions(),
-                tools=self.list_tools(),
-                tool_results=resolution.prior_tool_results + (tool_result,),
-                skills=tuple(
-                    metadata
-                    for metadata in self.list_skills()
-                    if metadata.enabled
-                ),
-                loaded_skills=resolution.loaded_skills,
+        try:
+            reply = await self._provider.complete(
+                ProviderRequest(
+                    messages=binding.initiating_context,
+                    system_instructions=self._system_instructions(),
+                    tools=self.list_tools(),
+                    assistant_tool_calls=(
+                        ToolCall(
+                            resolution.call_id,
+                            binding.tool,
+                            binding.arguments,
+                        ),
+                    ),
+                    tool_results=resolution.prior_tool_results + (tool_result,),
+                    skills=tuple(
+                        metadata
+                        for metadata in self.list_skills()
+                        if metadata.enabled
+                    ),
+                    loaded_skills=resolution.loaded_skills,
+                )
             )
-        )
+        except ProviderFailure as error:
+            result = self._provider_failure_result(
+                error=error, events=events, emit=emit
+            )
+            self._record_history(binding.conversation_id, (result.chat_content,))
+            return result
         emit("provider_completed", provider=self._provider.name)
         emit("turn_completed", stop_reason=stop_reason)
         chat_content = ChatContent(role="assistant", content=reply.content.strip())
@@ -299,6 +316,7 @@ class AgentCore:
 
         emit("turn_started", message_count=len(messages))
         tool_results: list[ToolExecutionResult] = []
+        assistant_tool_calls: list[ToolCall] = []
         loaded_skills: dict[str, LoadedSkill] = {}
         handled_call_ids: set[str] = set()
         provider_steps = 0
@@ -327,6 +345,7 @@ class AgentCore:
                         messages=provider_messages,
                         system_instructions=self._system_instructions(),
                         tools=self.list_tools(),
+                        assistant_tool_calls=tuple(assistant_tool_calls),
                         tool_results=tuple(tool_results),
                         skills=tuple(
                             metadata
@@ -337,30 +356,16 @@ class AgentCore:
                     )
                 )
             except ProviderFailure as error:
-                emit(
-                    "provider_failed",
-                    provider=self._provider.name,
-                    code=error.code,
-                    retryable=error.retryable,
-                    attempts=error.attempts,
+                result = self._provider_failure_result(
+                    error=error, events=events, emit=emit
                 )
-                chat_content = ChatContent(
-                    role="assistant",
-                    content=(
-                        "I couldn't reach the configured model Provider, so I can't "
-                        "answer that reliably right now. Please check Settings and "
-                        "try again."
-                    ),
+                self._record_history(
+                    conversation_id, (*messages, result.chat_content)
                 )
-                emit("turn_completed", stop_reason="provider_error")
-                self._record_history(conversation_id, (*messages, chat_content))
-                return TurnResult(
-                    chat_content=chat_content,
-                    stop_reason="provider_error",
-                    events=tuple(events),
-                )
+                return result
             emit("provider_completed", provider=self._provider.name)
             last_reply_content = reply.content.strip()
+            assistant_tool_calls.extend(reply.tool_calls)
             if not reply.tool_calls and not reply.selected_skills:
                 if clarification_requested:
                     final_stop_reason = "clarification"
@@ -494,6 +499,32 @@ class AgentCore:
         )
         self._audit.append(event)
         return event
+
+    def _provider_failure_result(
+        self,
+        *,
+        error: ProviderFailure,
+        events: list[RuntimeEvent],
+        emit: Callable[..., None],
+    ) -> TurnResult:
+        emit(
+            "provider_failed",
+            provider=self._provider.name,
+            code=error.code,
+            retryable=error.retryable,
+            attempts=error.attempts,
+        )
+        content = (
+            self._provider_failure_content_provider(error).strip()
+            if self._provider_failure_content_provider is not None
+            else ""
+        )
+        emit("turn_completed", stop_reason="provider_error")
+        return TurnResult(
+            chat_content=ChatContent(role="assistant", content=content),
+            stop_reason="provider_error",
+            events=tuple(events),
+        )
 
     @staticmethod
     def _limit_result(

@@ -82,7 +82,11 @@ def test_settings_create_and_list_provider_with_masked_local_credentials(
 def test_settings_validate_and_disable_a_provider(tmp_path: Path) -> None:
     async def exercise_boundary() -> None:
         transport = RecordedTransport(
-            (ProviderTransportResponse(status_code=200, payload={"data": []}),)
+            (
+                ProviderTransportResponse(
+                    status_code=200, payload={"data": [{"id": "chat-model"}]}
+                ),
+            )
         )
         app = create_app(
             conversation_database_path=tmp_path / "mellowday.sqlite3",
@@ -128,7 +132,10 @@ def test_settings_validate_and_disable_a_provider(tmp_path: Path) -> None:
         assert disabled.json()["provider"]["enabled"] is False
         assert disabled.json()["provider"]["selected"] is False
         assert reselection.status_code == 409
-        assert fallback_turn.json()["chat_content"]["content"] == "I heard: Hello"
+        assert fallback_turn.json()["stop_reason"] == "provider_error"
+        assert "no model Provider is selected" in fallback_turn.json()[
+            "chat_content"
+        ]["content"]
 
     asyncio.run(exercise_boundary())
 
@@ -179,7 +186,7 @@ def test_provider_credentials_never_appear_in_chat_events_or_diagnostics(
         outputs = (chat, audit, events, diagnostics, settings)
         assert all(secret not in response.text for response in outputs)
         assert chat.json()["stop_reason"] == "provider_error"
-        assert "can't answer that reliably" in chat.json()["chat_content"]["content"]
+        assert "rejected its credentials" in chat.json()["chat_content"]["content"]
         assert chat.json()["events"][2]["details"] == {
             "provider": "Remote model",
             "code": "authentication",
