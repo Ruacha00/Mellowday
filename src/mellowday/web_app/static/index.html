@@ -93,6 +93,52 @@
 
         <p id="settings-status" class="settings-status" role="status"></p>
 
+        <section class="persona-settings" aria-labelledby="persona-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Chat Content only</p>
+              <h3 id="persona-settings-title">Persona</h3>
+              <p class="capability-description">
+                Manage the Assistant identity and conversational style. These settings
+                do not change management records or runtime output.
+              </p>
+            </div>
+            <span class="local-badge">One 路 Local</span>
+          </header>
+
+          <form id="persona-form" class="persona-form">
+            <label>
+              <span>Name</span>
+              <input name="name" autocomplete="off" required />
+            </label>
+            <label>
+              <span>Identity</span>
+              <textarea name="identity" rows="2" required></textarea>
+            </label>
+            <label>
+              <span>Character</span>
+              <textarea name="character" rows="2" required></textarea>
+            </label>
+            <label>
+              <span>Speaking style</span>
+              <textarea name="speaking_style" rows="2" required></textarea>
+            </label>
+            <label>
+              <span>Relationship framing</span>
+              <textarea name="relationship_framing" rows="2" required></textarea>
+            </label>
+            <label>
+              <span>Conversational boundaries</span>
+              <textarea name="conversational_boundaries" rows="2" required></textarea>
+            </label>
+            <label>
+              <span>Proactive-chat style</span>
+              <textarea name="proactive_chat_style" rows="2" required></textarea>
+            </label>
+            <button type="submit">Save Persona</button>
+          </form>
+        </section>
+
         <section class="history-settings" aria-labelledby="history-settings-title">
           <header class="history-settings-heading">
             <div>

@@ -26,6 +26,7 @@ from mellowday.agent_core import (
     Tool,
     TurnRequest,
 )
+from mellowday.personal_assistant import Persona, SQLitePersonaStore
 
 
 _STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
@@ -40,6 +41,16 @@ class ChatRequestBody(BaseModel):
 
 class SkillEnablementBody(BaseModel):
     enabled: bool
+
+
+class PersonaBody(BaseModel):
+    name: str
+    identity: str
+    character: str
+    speaking_style: str
+    relationship_framing: str
+    conversational_boundaries: str
+    proactive_chat_style: str
 
 
 class ConfirmationChatContentBody(BaseModel):
@@ -111,6 +122,7 @@ def create_app(
     conversation_history = SQLiteConversationHistory(
         database_path, events=runtime_events
     )
+    persona_store = SQLitePersonaStore(database_path)
     agent_core = AgentCore(
         provider=selected_provider,
         tools=tools,
@@ -120,6 +132,7 @@ def create_app(
         conversation_history=conversation_history,
         history_message_limit=history_message_limit,
         history_character_limit=history_character_limit,
+        system_instructions_provider=lambda: persona_store.get().chat_instructions(),
     )
     app = FastAPI(title="Mellowday", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=_STATIC_DIRECTORY), name="static")
@@ -258,6 +271,15 @@ def create_app(
             "removed_messages": removed_messages,
             "event": asdict(event),
         }
+
+    @app.get("/api/settings/persona")
+    async def get_persona() -> dict[str, object]:
+        return {"persona": asdict(persona_store.get())}
+
+    @app.put("/api/settings/persona")
+    async def update_persona(body: PersonaBody) -> dict[str, object]:
+        persona = persona_store.update(Persona(**body.model_dump()))
+        return {"persona": asdict(persona)}
 
     @app.post("/api/conversations/{conversation_id}/reset-confirmation")
     async def request_reset_confirmation(

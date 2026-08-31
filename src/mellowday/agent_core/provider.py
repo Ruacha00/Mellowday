@@ -27,6 +27,7 @@ class ProviderRequest:
     tool_results: tuple[ToolExecutionResult, ...] = ()
     skills: tuple[SkillMetadata, ...] = ()
     loaded_skills: tuple[LoadedSkill, ...] = ()
+    system_instructions: str = ""
 
 
 class ModelProvider(Protocol):
