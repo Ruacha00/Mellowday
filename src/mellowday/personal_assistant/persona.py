@@ -57,6 +57,11 @@ class Persona:
         detail = details.get(code, "the configured model Provider failed")
         return f"I can't answer reliably right now because {detail}."
 
+    def reminder_chat_content(self, message: str) -> str:
+        """Render a truthful Reminder as Persona-owned Chat Content."""
+
+        return f"{self.name} reminder: {message}"
+
 
 DEFAULT_PERSONA = Persona(
     name="Mellowday",

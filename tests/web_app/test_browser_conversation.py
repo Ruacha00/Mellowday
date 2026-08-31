@@ -4,6 +4,7 @@ import time
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
@@ -139,6 +140,56 @@ def test_user_can_inspect_and_manage_capabilities_from_settings(
         browser.close()
 
 
+def test_due_reminder_is_delivered_live_once_and_survives_restart(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "mellowday.sqlite3"
+    now = 1_788_200_100.0
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=database_path,
+        audit_path=None,
+        reminder_clock=lambda: now,
+        reminder_poll_interval=0.05,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        due_at = datetime.fromtimestamp(now - 1, timezone.utc).isoformat()
+        with Client(base_url=base_url) as client:
+            created = client.post(
+                "/api/settings/reminders",
+                json={"message": "Join the call", "due_at": due_at},
+            )
+        assert created.status_code == 201
+        expect(
+            page.get_by_text("Mellowday reminder: Join the call", exact=True)
+        ).to_be_visible(timeout=5_000)
+        browser.close()
+
+    restarted = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=database_path,
+        audit_path=None,
+        reminder_clock=lambda: now,
+        reminder_poll_interval=0.05,
+    )
+    with running_server(restarted) as base_url:
+        with Client(base_url=base_url) as client:
+            reminder = client.get("/api/settings/reminders").json()["reminders"][0]
+            conversation = client.get("/api/conversations/main").json()
+
+    assert reminder["delivery_state"] == "delivered"
+    assert reminder["delivery_attempted_at"] is not None
+    assert [
+        message["content"]
+        for message in conversation["messages"]
+        if message["content"] == "Mellowday reminder: Join the call"
+    ] == ["Mellowday reminder: Join the call"]
+
+
 def test_conversation_surface_creates_a_task_through_the_registered_tool(
     tmp_path: Path,
 ) -> None:
@@ -252,6 +303,41 @@ def test_user_can_manage_tasks_from_settings(tmp_path: Path) -> None:
         expect(page.get_by_text("Send report", exact=True)).to_be_visible()
         page.get_by_role("button", name="Delete Send report").click()
         expect(page.get_by_text("No Tasks yet.", exact=True)).to_be_visible()
+        browser.close()
+
+
+def test_user_can_manage_reminders_from_settings(tmp_path: Path) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        page.get_by_role("button", name="Settings").click()
+
+        page.get_by_label("Reminder text", exact=True).fill("Join the call")
+        page.get_by_label("Reminder due time", exact=True).fill(
+            "2026-09-04T17:00"
+        )
+        page.get_by_role("button", name="Add Reminder").click()
+
+        expect(page.locator("#settings-status")).to_have_text("Reminder added.")
+        expect(page.get_by_text("Join the call", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Edit Join the call").click()
+        page.get_by_label("Reminder text", exact=True).fill("Join stand-up")
+        page.get_by_role("button", name="Save Reminder").click()
+        expect(page.get_by_text("Join stand-up", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Dismiss Join stand-up").click()
+        expect(page.get_by_text("Dismissed", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Cancel Join stand-up").click()
+        expect(page.get_by_text("Cancelled", exact=True)).to_be_visible()
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Delete Join stand-up").click()
+        expect(page.get_by_text("No Reminders yet.", exact=True)).to_be_visible()
         browser.close()
 
 

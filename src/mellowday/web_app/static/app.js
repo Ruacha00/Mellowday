@@ -48,8 +48,25 @@ const recentConfirmationList = document.querySelector("#recent-confirmation-list
 const taskForm = document.querySelector("#task-form");
 const taskList = document.querySelector("#task-list");
 const cancelTaskEdit = document.querySelector("#cancel-task-edit");
+const reminderForm = document.querySelector("#reminder-form");
+const reminderList = document.querySelector("#reminder-list");
+const cancelReminderEdit = document.querySelector("#cancel-reminder-edit");
 
 const activeConversationId = "main";
+const liveStartedAt = Date.now() / 1000;
+const deliveredReminderIds = new Set();
+window.setTimeout(() => {
+  const liveConversation = new EventSource(
+    `/api/conversations/${encodeURIComponent(activeConversationId)}/live?after=${liveStartedAt}`,
+  );
+  liveConversation.addEventListener("reminder", (event) => {
+    const delivery = JSON.parse(event.data);
+    if (deliveredReminderIds.has(delivery.reminder_id)) return;
+    deliveredReminderIds.add(delivery.reminder_id);
+    appendMessage(delivery.role, delivery.content);
+    status.textContent = "Reminder delivered.";
+  });
+}, 750);
 let selectedConversationId = null;
 let pendingResetConfirmation = null;
 let eventCursor = 0;
@@ -628,6 +645,160 @@ taskForm.addEventListener("submit", async (event) => {
 
 cancelTaskEdit.addEventListener("click", resetTaskForm);
 
+function reminderInputValue(value) {
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function resetReminderForm() {
+  reminderForm.reset();
+  reminderForm.elements.namedItem("reminder_id").value = "";
+  reminderForm.querySelector('button[type="submit"]').textContent = "Add Reminder";
+  cancelReminderEdit.hidden = true;
+}
+
+function editReminder(reminder) {
+  reminderForm.elements.namedItem("reminder_id").value = reminder.id;
+  reminderForm.elements.namedItem("message").value = reminder.message;
+  reminderForm.elements.namedItem("due_at").value = reminderInputValue(reminder.due_at);
+  reminderForm.elements.namedItem("task_id").value = reminder.task_id || "";
+  reminderForm.querySelector('button[type="submit"]').textContent = "Save Reminder";
+  cancelReminderEdit.hidden = false;
+  reminderForm.elements.namedItem("message").focus();
+}
+
+function reminderAction(label, reminder, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = label;
+  button.setAttribute("aria-label", `${label} ${reminder.message}`);
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function reminderStateLabel(state) {
+  return state.charAt(0).toUpperCase() + state.slice(1);
+}
+
+function renderReminders(reminders) {
+  reminderList.replaceChildren();
+  if (reminders.length === 0) {
+    reminderList.append(makeEmptyState("No Reminders yet."));
+    return;
+  }
+  for (const reminder of reminders) {
+    const card = document.createElement("article");
+    card.className = "capability-card task-card";
+    const heading = document.createElement("div");
+    heading.className = "task-card-heading";
+    const message = document.createElement("strong");
+    message.textContent = reminder.message;
+    const state = document.createElement("span");
+    state.className = "skill-state";
+    state.textContent = reminderStateLabel(reminder.delivery_state);
+    heading.append(message, state);
+    const due = document.createElement("p");
+    due.className = "task-deadline";
+    due.textContent = `Due ${new Date(reminder.due_at).toLocaleString()}`;
+    const link = document.createElement("p");
+    link.className = "capability-description";
+    link.textContent = reminder.task_id ? `Linked Task ${reminder.task_id}` : "No linked Task";
+    const actions = document.createElement("div");
+    actions.className = "task-actions";
+    actions.append(
+      reminderAction("Edit", reminder, () => editReminder(reminder)),
+      reminderAction("Dismiss", reminder, async () => {
+        const response = await fetch(
+          `/api/settings/reminders/${encodeURIComponent(reminder.id)}/dismiss`,
+          { method: "POST" },
+        );
+        settingsStatus.textContent = response.ok ? "Reminder dismissed." : "Reminder could not be dismissed.";
+        if (response.ok) await loadReminders();
+      }),
+      reminderAction("Cancel", reminder, async () => {
+        const response = await fetch(
+          `/api/settings/reminders/${encodeURIComponent(reminder.id)}/cancel`,
+          { method: "POST" },
+        );
+        settingsStatus.textContent = response.ok ? "Reminder cancelled." : "Reminder could not be cancelled.";
+        if (response.ok) await loadReminders();
+      }),
+      reminderAction("Delete", reminder, async () => {
+        if (!window.confirm(`Permanently delete ${reminder.message}?`)) return;
+        const path = `/api/settings/reminders/${encodeURIComponent(reminder.id)}`;
+        const requested = await fetch(`${path}/delete-confirmation`, { method: "POST" });
+        if (!requested.ok) {
+          settingsStatus.textContent = "Reminder could not be deleted.";
+          return;
+        }
+        const { confirmation } = await requested.json();
+        const response = await fetch(path, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmation_id: confirmation.id,
+            binding: confirmation.binding,
+            decision: "accept",
+          }),
+        });
+        settingsStatus.textContent = response.ok ? "Reminder deleted." : "Reminder delete confirmation is unavailable.";
+        if (response.ok) {
+          resetReminderForm();
+          await loadReminders();
+        }
+      }),
+    );
+    card.append(heading, due, link, actions);
+    reminderList.append(card);
+  }
+}
+
+async function loadReminders() {
+  const response = await fetch("/api/settings/reminders");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderReminders(payload.reminders);
+}
+
+reminderForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const reminderId = reminderForm.elements.namedItem("reminder_id").value;
+  const button = reminderForm.querySelector('button[type="submit"]');
+  const values = Object.fromEntries(new FormData(reminderForm).entries());
+  const body = {
+    message: values.message,
+    due_at: new Date(values.due_at).toISOString(),
+    task_id: values.task_id || null,
+    conversation_id: activeConversationId,
+  };
+  button.disabled = true;
+  try {
+    const response = await fetch(
+      reminderId ? `/api/settings/reminders/${encodeURIComponent(reminderId)}` : "/api/settings/reminders",
+      {
+        method: reminderId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.detail?.message || `Request failed with ${response.status}`);
+    }
+    resetReminderForm();
+    settingsStatus.textContent = reminderId ? "Reminder saved." : "Reminder added.";
+    await loadReminders();
+  } catch (error) {
+    settingsStatus.textContent = `Reminder could not be saved: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+cancelReminderEdit.addEventListener("click", resetReminderForm);
+
 function resetProviderForm() {
   providerForm.reset();
   providerForm.elements.namedItem("provider_id").value = "";
@@ -1179,6 +1350,7 @@ async function loadSettings() {
     await Promise.all([
       loadPersona(),
       loadTasks(),
+      loadReminders(),
       loadProviders(),
       loadConversations(),
       loadCapabilities(),

@@ -15,7 +15,7 @@ from .events import RuntimeEventLog
 from .types import ChatContent, EventType
 
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +110,17 @@ class SQLiteConversationHistory:
                     );
                     CREATE INDEX conversation_messages_by_conversation
                         ON conversation_messages(conversation_id, message_id);
-                    PRAGMA user_version = 1;
+                    """
+                )
+            if version < 2:
+                connection.executescript(
+                    """
+                    CREATE TABLE conversation_message_deduplication (
+                        deduplication_key TEXT PRIMARY KEY,
+                        conversation_id TEXT NOT NULL,
+                        created_at REAL NOT NULL
+                    );
+                    PRAGMA user_version = 2;
                     """
                 )
         self._emit(
@@ -184,6 +194,58 @@ class SQLiteConversationHistory:
             conversation_id=conversation_id,
             messages_added=len(messages),
         )
+
+    def append_once(
+        self,
+        conversation_id: str,
+        message: ChatContent,
+        *,
+        deduplication_key: str,
+    ) -> bool:
+        """Append one message once for an idempotent external delivery."""
+
+        occurred_at = self._clock()
+        with self._diagnose("append", conversation_id=conversation_id):
+            with self._connect() as connection:
+                inserted = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO conversation_message_deduplication(
+                        deduplication_key, conversation_id, created_at
+                    ) VALUES (?, ?, ?)
+                    """,
+                    (deduplication_key, conversation_id, occurred_at),
+                )
+                if inserted.rowcount == 0:
+                    return False
+                connection.execute(
+                    """
+                    INSERT INTO conversations(conversation_id, created_at, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(conversation_id) DO NOTHING
+                    """,
+                    (conversation_id, occurred_at, occurred_at),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO conversation_messages(
+                        conversation_id, role, content, created_at
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (conversation_id, message.role, message.content, occurred_at),
+                )
+                connection.execute(
+                    """
+                    UPDATE conversations SET updated_at = ?
+                    WHERE conversation_id = ?
+                    """,
+                    (occurred_at, conversation_id),
+                )
+        self._emit(
+            "conversation_history_appended",
+            conversation_id=conversation_id,
+            messages_added=1,
+        )
+        return True
 
     def recent(
         self,

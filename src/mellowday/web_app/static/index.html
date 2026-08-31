@@ -207,6 +207,42 @@
           <div id="task-list" class="task-list" aria-live="polite"></div>
         </section>
 
+        <section class="task-settings" aria-labelledby="reminder-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Life Records</p>
+              <h3 id="reminder-settings-title">Reminders</h3>
+              <p class="capability-description">
+                Schedule notifications independently from Task completion.
+              </p>
+            </div>
+            <span class="local-badge">Local Reminders</span>
+          </header>
+
+          <form id="reminder-form" class="task-form">
+            <input name="reminder_id" type="hidden" />
+            <label>
+              <span>Reminder text</span>
+              <input name="message" autocomplete="off" required aria-label="Reminder text" />
+            </label>
+            <label>
+              <span>Reminder due time</span>
+              <input name="due_at" type="datetime-local" required aria-label="Reminder due time" />
+            </label>
+            <label>
+              <span>Linked Task ID (optional)</span>
+              <input name="task_id" autocomplete="off" aria-label="Linked Task ID" />
+            </label>
+            <div class="task-form-actions">
+              <button type="submit">Add Reminder</button>
+              <button id="cancel-reminder-edit" class="text-button" type="button" hidden>
+                Cancel edit
+              </button>
+            </div>
+          </form>
+          <div id="reminder-list" class="task-list" aria-live="polite"></div>
+        </section>
+
         <section class="provider-settings" aria-labelledby="provider-settings-title">
           <header class="history-settings-heading">
             <div>
