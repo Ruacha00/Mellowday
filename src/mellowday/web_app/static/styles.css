@@ -267,6 +267,37 @@ h1 {
   cursor: not-allowed;
 }
 
+.history-reset-actions {
+  display: grid;
+  justify-items: end;
+}
+
+.reset-confirmation {
+  display: grid;
+  gap: 10px;
+  max-width: 310px;
+  padding: 14px;
+  border: 1px solid rgba(198, 75, 54, 0.32);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.reset-confirmation[hidden] {
+  display: none;
+}
+
+.reset-confirmation p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.reset-confirmation div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .history-messages {
   display: grid;
   gap: 14px;

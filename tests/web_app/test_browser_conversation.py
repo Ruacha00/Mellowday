@@ -224,6 +224,14 @@ def test_settings_reviews_and_resets_conversation_history(tmp_path: Path) -> Non
         ).to_be_visible()
 
         page.get_by_role("button", name="Reset conversation").click()
+        expect(
+            page.get_by_text(
+                "This permanently deletes this conversation's messages.",
+                exact=True,
+            )
+        ).to_be_visible()
+        expect(page.get_by_text("No conversations yet.")).not_to_be_visible()
+        page.get_by_role("button", name="Confirm reset").click()
         expect(page.get_by_text("No conversations yet.")).to_be_visible()
         page.get_by_role("button", name="Back to conversation").click()
         expect(page.locator('[data-role="user"]')).to_have_count(0)

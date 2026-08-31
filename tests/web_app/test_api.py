@@ -109,7 +109,7 @@ def test_agent_core_receives_bounded_recent_history_through_the_web_app(
             provider=ContextEchoProvider(),
             conversation_database_path=database_path,
             history_message_limit=1,
-            history_context_limit=100,
+            history_character_limit=100,
             audit_path=None,
         )
         async with AsyncClient(
@@ -124,15 +124,15 @@ def test_agent_core_receives_bounded_recent_history_through_the_web_app(
             "assistant:user:one | user:two"
         )
 
-        context_limited_app = create_app(
+        character_limited_app = create_app(
             provider=ContextEchoProvider(),
             conversation_database_path=database_path,
             history_message_limit=40,
-            history_context_limit=8,
+            history_character_limit=8,
             audit_path=None,
         )
         async with AsyncClient(
-            transport=ASGITransport(app=context_limited_app),
+            transport=ASGITransport(app=character_limited_app),
             base_url="http://test",
         ) as client:
             third = await client.post(
@@ -165,7 +165,40 @@ def test_settings_resets_only_selected_history_and_reports_structured_events(
                 json={"conversation_id": "reset", "content": "Remove this"},
             )
             before_reset = await client.get("/api/events/recent")
-            reset = await client.post("/api/conversations/reset/reset")
+            unconfirmed = await client.post("/api/conversations/reset/reset")
+            cancel_requested = await client.post(
+                "/api/conversations/reset/reset-confirmation"
+            )
+            cancel_confirmation = cancel_requested.json()["confirmation"]
+            cancelled = await client.post(
+                "/api/conversations/reset/reset",
+                json={
+                    "decision": "reject",
+                    "binding": cancel_confirmation["binding"],
+                    "confirmation_id": cancel_confirmation["id"],
+                },
+            )
+            after_cancel = await client.get("/api/conversations/reset")
+            requested = await client.post(
+                "/api/conversations/reset/reset-confirmation"
+            )
+            confirmation = requested.json()["confirmation"]
+            reset = await client.post(
+                "/api/conversations/reset/reset",
+                json={
+                    "decision": "accept",
+                    "binding": confirmation["binding"],
+                    "confirmation_id": confirmation["id"],
+                },
+            )
+            replay = await client.post(
+                "/api/conversations/reset/reset",
+                json={
+                    "decision": "accept",
+                    "binding": confirmation["binding"],
+                    "confirmation_id": confirmation["id"],
+                },
+            )
             reset_history = await client.get("/api/conversations/reset")
             kept_history = await client.get("/api/conversations/keep")
             after_reset = await client.get("/api/events/recent")
@@ -183,8 +216,25 @@ def test_settings_resets_only_selected_history_and_reports_structured_events(
             "from_version": 0,
             "schema_version": 1,
         }
+        assert unconfirmed.status_code == 422
+        assert cancel_requested.status_code == 200
+        assert cancelled.status_code == 200
+        assert cancelled.json()["ok"] is False
+        assert cancelled.json()["decision"] == "reject"
+        assert cancelled.json()["removed_messages"] == 0
+        assert after_cancel.status_code == 200
+        assert requested.status_code == 200
+        assert confirmation["binding"] == {
+            "user_id": "local-user",
+            "conversation_id": "reset",
+            "tool": "conversation_history.reset",
+            "arguments": {},
+            "initiating_context": [],
+        }
         assert reset.status_code == 200
-        assert reset.json() == {"ok": True, "removed_messages": 2}
+        assert reset.json()["ok"] is True
+        assert reset.json()["removed_messages"] == 2
+        assert replay.status_code == 409
         assert reset_history.status_code == 404
         assert kept_history.status_code == 200
         assert [message["content"] for message in kept_history.json()["messages"]] == [

@@ -35,7 +35,7 @@ python -m mellowday.web_app
 
 打开 <http://127.0.0.1:8000/>；健康检查位于 <http://127.0.0.1:8000/healthz>。默认 Conversation History 数据库位于 `data/mellowday.sqlite3`，首次启动时会自动初始化。当前切片刻意使用 Fake Provider，不需要模型凭据或网络访问。
 
-应用组合可通过 `create_app` 的 `conversation_database_path`、`history_message_limit` 和 `history_context_limit` 参数调整本地数据位置，以及传给 Agent Core 的最近历史消息数和字符预算。
+应用组合可通过 `create_app` 的 `conversation_database_path`、`history_message_limit` 和 `history_character_limit` 参数调整本地数据位置，以及传给 Agent Core 的最近历史消息数和字符预算。
 
 ## Test and build
 

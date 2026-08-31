@@ -130,9 +130,22 @@
                     Choose a conversation to review its messages.
                   </p>
                 </div>
-                <button id="reset-history" class="reset-button" type="button" disabled>
-                  Reset conversation
-                </button>
+                <div class="history-reset-actions">
+                  <button id="reset-history" class="reset-button" type="button" disabled>
+                    Reset conversation
+                  </button>
+                  <div id="reset-confirmation" class="reset-confirmation" hidden>
+                    <p>This permanently deletes this conversation's messages.</p>
+                    <div>
+                      <button id="cancel-reset" class="text-button" type="button">
+                        Cancel
+                      </button>
+                      <button id="confirm-reset" class="reset-button" type="button">
+                        Confirm reset
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </header>
               <ol
                 id="history-messages"

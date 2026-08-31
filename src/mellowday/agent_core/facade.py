@@ -12,6 +12,7 @@ from .audit import AuditLog
 from .confirmations import (
     ConfirmationBinding,
     ConfirmationDecision,
+    ConfirmationDecisionValue,
     ConfirmationResolution,
     ConfirmationStore,
     PendingConfirmation,
@@ -55,7 +56,7 @@ class AgentCore:
         audit_path: str | Path | None = None,
         conversation_history: ConversationHistory | None = None,
         history_message_limit: int = 40,
-        history_context_limit: int = 12_000,
+        history_character_limit: int = 12_000,
         clock: Callable[[], float] = time.time,
     ) -> None:
         if max_provider_steps < 1:
@@ -64,14 +65,17 @@ class AgentCore:
             raise ValueError("max_tool_calls must not be negative")
         if history_message_limit < 1:
             raise ValueError("history_message_limit must be positive")
-        if history_context_limit < 1:
-            raise ValueError("history_context_limit must be positive")
+        if history_character_limit < 1:
+            raise ValueError("history_character_limit must be positive")
         self._provider = provider
         self._permission_engine = PermissionEngine()
         self._confirmations = ConfirmationStore(confirmation_ttl_seconds)
+        self._history_reset_confirmations = ConfirmationStore(
+            confirmation_ttl_seconds
+        )
         self._conversation_history = conversation_history
         self._history_message_limit = history_message_limit
-        self._history_context_limit = history_context_limit
+        self._history_character_limit = history_character_limit
         self._clock = clock
         self._max_provider_steps = max_provider_steps
         self._max_tool_calls = max_tool_calls
@@ -118,6 +122,62 @@ class AgentCore:
         """Return neutral action and runtime history in sequence order."""
 
         return self._audit.events()
+
+    def request_conversation_history_reset(
+        self, *, user_id: str, conversation_id: str
+    ) -> tuple[PendingConfirmation, RuntimeEvent]:
+        """Create a bound, expiring confirmation for an irreversible reset."""
+
+        binding = ConfirmationBinding(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            tool="conversation_history.reset",
+            arguments={},
+            initiating_context=(),
+        )
+        pending = self._history_reset_confirmations.create(
+            binding=binding,
+            call_id="conversation-history-reset",
+            granted_permissions=(),
+            prior_tool_results=(),
+            loaded_skills=(),
+            now=self._clock(),
+        )
+        event = self._runtime_event(
+            "confirmation_pending",
+            conversation_id=conversation_id,
+            confirmation_id=pending.id,
+            tool=binding.tool,
+            expires_at=pending.expires_at,
+        )
+        return pending, event
+
+    def decide_conversation_history_reset(
+        self, decision: ConfirmationDecision
+    ) -> tuple[ConfirmationDecisionValue, int, RuntimeEvent]:
+        """Resolve one reset confirmation and delete history only when accepted."""
+
+        resolution = self._history_reset_confirmations.decide(
+            decision, now=self._clock()
+        )
+        binding = resolution.pending.binding
+        removed_messages = 0
+        if resolution.decision == "accept":
+            if self._conversation_history is None:
+                raise RuntimeError("Conversation History is not configured")
+            removed_messages = self._conversation_history.reset(
+                binding.conversation_id
+            )
+            event_type: EventType = "confirmation_accepted"
+        else:
+            event_type = "confirmation_rejected"
+        event = self._runtime_event(
+            event_type,
+            conversation_id=binding.conversation_id,
+            confirmation_id=resolution.pending.id,
+            tool=binding.tool,
+        )
+        return resolution.decision, removed_messages, event
 
     async def decide_confirmation(
         self, decision: ConfirmationDecision
@@ -217,7 +277,7 @@ class AgentCore:
             self._conversation_history.recent(
                 conversation_id,
                 message_limit=self._history_message_limit,
-                context_limit=self._history_context_limit,
+                character_limit=self._history_character_limit,
             )
             if self._conversation_history is not None
             else ()

@@ -41,12 +41,14 @@ class ConversationHistory(Protocol):
         conversation_id: str,
         *,
         message_limit: int,
-        context_limit: int,
+        character_limit: int,
     ) -> tuple[ChatContent, ...]: ...
 
     def append(
         self, conversation_id: str, messages: tuple[ChatContent, ...]
     ) -> None: ...
+
+    def reset(self, conversation_id: str) -> int: ...
 
 
 class ConversationHistoryError(RuntimeError):
@@ -188,7 +190,7 @@ class SQLiteConversationHistory:
         conversation_id: str,
         *,
         message_limit: int,
-        context_limit: int,
+        character_limit: int,
     ) -> tuple[ChatContent, ...]:
         with self._diagnose("load", conversation_id=conversation_id):
             with self._connect() as connection:
@@ -207,7 +209,7 @@ class SQLiteConversationHistory:
         used_characters = 0
         for row in rows:
             content = str(row["content"])
-            if used_characters + len(content) > context_limit:
+            if used_characters + len(content) > character_limit:
                 break
             selected.append(ChatContent(role=row["role"], content=content))
             used_characters += len(content)
@@ -223,22 +225,7 @@ class SQLiteConversationHistory:
     def list_conversations(self) -> tuple[ConversationSummary, ...]:
         with self._diagnose("list"):
             with self._connect() as connection:
-                rows = connection.execute(
-                    """
-                    SELECT
-                        conversations.conversation_id,
-                        COUNT(conversation_messages.message_id) AS message_count,
-                        COALESCE(SUM(LENGTH(conversation_messages.content)), 0)
-                            AS character_count,
-                        conversations.created_at,
-                        conversations.updated_at
-                    FROM conversations
-                    LEFT JOIN conversation_messages USING (conversation_id)
-                    GROUP BY conversations.conversation_id
-                    ORDER BY conversations.updated_at DESC,
-                             conversations.conversation_id ASC
-                    """
-                ).fetchall()
+                rows = self._conversation_summaries(connection)
         summaries = tuple(self._summary_from_row(row) for row in rows)
         self._emit("conversation_history_listed", conversation_count=len(summaries))
         return summaries
@@ -246,22 +233,10 @@ class SQLiteConversationHistory:
     def get_conversation(self, conversation_id: str) -> StoredConversation | None:
         with self._diagnose("read", conversation_id=conversation_id):
             with self._connect() as connection:
-                row = connection.execute(
-                    """
-                    SELECT
-                        conversations.conversation_id,
-                        COUNT(conversation_messages.message_id) AS message_count,
-                        COALESCE(SUM(LENGTH(conversation_messages.content)), 0)
-                            AS character_count,
-                        conversations.created_at,
-                        conversations.updated_at
-                    FROM conversations
-                    LEFT JOIN conversation_messages USING (conversation_id)
-                    WHERE conversations.conversation_id = ?
-                    GROUP BY conversations.conversation_id
-                    """,
-                    (conversation_id,),
-                ).fetchone()
+                rows = self._conversation_summaries(
+                    connection, conversation_id=conversation_id
+                )
+                row = rows[0] if rows else None
                 if row is None:
                     self._emit(
                         "conversation_history_read",
@@ -315,6 +290,31 @@ class SQLiteConversationHistory:
             removed_messages=removed_messages,
         )
         return removed_messages
+
+    @staticmethod
+    def _conversation_summaries(
+        connection: sqlite3.Connection,
+        *,
+        conversation_id: str | None = None,
+    ) -> list[sqlite3.Row]:
+        return connection.execute(
+            """
+            SELECT
+                conversations.conversation_id,
+                COUNT(conversation_messages.message_id) AS message_count,
+                COALESCE(SUM(LENGTH(conversation_messages.content)), 0)
+                    AS character_count,
+                conversations.created_at,
+                conversations.updated_at
+            FROM conversations
+            LEFT JOIN conversation_messages USING (conversation_id)
+            WHERE (? IS NULL OR conversations.conversation_id = ?)
+            GROUP BY conversations.conversation_id
+            ORDER BY conversations.updated_at DESC,
+                     conversations.conversation_id ASC
+            """,
+            (conversation_id, conversation_id),
+        ).fetchall()
 
     @staticmethod
     def _summary_from_row(row: sqlite3.Row) -> ConversationSummary:

@@ -21,10 +21,14 @@ const historyTitle = document.querySelector("#history-detail-title");
 const historyMetadata = document.querySelector("#history-metadata");
 const historyMessages = document.querySelector("#history-messages");
 const resetHistory = document.querySelector("#reset-history");
+const resetConfirmation = document.querySelector("#reset-confirmation");
+const cancelReset = document.querySelector("#cancel-reset");
+const confirmReset = document.querySelector("#confirm-reset");
 const refreshHistory = document.querySelector("#refresh-history");
 
 const activeConversationId = "main";
 let selectedConversationId = null;
+let pendingResetConfirmation = null;
 
 function makeEmptyState(content) {
   const empty = document.createElement("p");
@@ -101,11 +105,20 @@ async function loadActiveConversation() {
 }
 
 function clearHistoryDetail() {
+  clearResetConfirmation();
   selectedConversationId = null;
   historyTitle.textContent = "No conversation selected";
   historyMetadata.textContent = "Choose a conversation to review its messages.";
   historyMessages.replaceChildren(makeEmptyState("No messages selected."));
   resetHistory.disabled = true;
+}
+
+function clearResetConfirmation() {
+  pendingResetConfirmation = null;
+  resetConfirmation.hidden = true;
+  resetHistory.hidden = false;
+  cancelReset.disabled = false;
+  confirmReset.disabled = false;
 }
 
 function formatUpdatedAt(value) {
@@ -161,6 +174,7 @@ async function loadConversations() {
 }
 
 async function loadConversationDetail(summary) {
+  clearResetConfirmation();
   settingsStatus.textContent = "";
   try {
     const response = await fetch(
@@ -230,22 +244,66 @@ resetHistory.addEventListener("click", async () => {
   if (!selectedConversationId) return;
   const conversationId = selectedConversationId;
   resetHistory.disabled = true;
-  settingsStatus.textContent = "Resetting Conversation History…";
+  settingsStatus.textContent = "Preparing reset confirmation…";
   try {
     const response = await fetch(
-      `/api/conversations/${encodeURIComponent(conversationId)}/reset`,
+      `/api/conversations/${encodeURIComponent(conversationId)}/reset-confirmation`,
       { method: "POST" },
     );
     if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    const payload = await response.json();
+    pendingResetConfirmation = payload.confirmation;
+    resetHistory.hidden = true;
+    resetConfirmation.hidden = false;
+    settingsStatus.textContent = "Explicit confirmation is required.";
+  } catch (error) {
+    resetHistory.disabled = false;
+    settingsStatus.textContent = "Reset confirmation could not be prepared.";
+  }
+});
+
+async function decideReset(decision) {
+  if (!selectedConversationId || !pendingResetConfirmation) return;
+  const conversationId = selectedConversationId;
+  cancelReset.disabled = true;
+  confirmReset.disabled = true;
+  settingsStatus.textContent =
+    decision === "accept"
+      ? "Resetting Conversation History…"
+      : "Cancelling reset…";
+  try {
+    const response = await fetch(
+      `/api/conversations/${encodeURIComponent(conversationId)}/reset`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmation_id: pendingResetConfirmation.id,
+          binding: pendingResetConfirmation.binding,
+          decision,
+        }),
+      },
+    );
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    clearResetConfirmation();
+    if (decision === "reject") {
+      resetHistory.disabled = false;
+      settingsStatus.textContent = "Reset cancelled.";
+      return;
+    }
     if (conversationId === activeConversationId) showWelcome();
     clearHistoryDetail();
     await loadConversations();
     settingsStatus.textContent = "Conversation History reset.";
   } catch (error) {
-    resetHistory.disabled = false;
+    cancelReset.disabled = false;
+    confirmReset.disabled = false;
     settingsStatus.textContent = "Conversation History could not be reset.";
   }
-});
+}
+
+cancelReset.addEventListener("click", () => decideReset("reject"));
+confirmReset.addEventListener("click", () => decideReset("accept"));
 
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
