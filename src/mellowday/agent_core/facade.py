@@ -124,11 +124,7 @@ class AgentCore:
     def list_pending_confirmations(self) -> tuple[PendingConfirmation, ...]:
         """Return pending confirmations without exposing executable state."""
 
-        now = self._clock()
-        return (
-            *self._confirmations.pending(now=now),
-            *self._history_reset_confirmations.pending(now=now),
-        )
+        return self._confirmations.pending(now=self._clock())
 
     def list_audit_events(self) -> tuple[RuntimeEvent, ...]:
         """Return neutral action and runtime history in sequence order."""

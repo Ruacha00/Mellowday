@@ -112,6 +112,7 @@ def test_settings_validate_and_disable_a_provider(tmp_path: Path) -> None:
             validated = await client.post(
                 f"/api/settings/providers/{provider_id}/validate"
             )
+            status = await client.get("/api/settings/status")
             disabled = await client.put(
                 f"/api/settings/providers/{provider_id}/enabled",
                 json={"enabled": False},
@@ -126,6 +127,8 @@ def test_settings_validate_and_disable_a_provider(tmp_path: Path) -> None:
 
         assert validated.status_code == 200
         assert validated.json() == {"valid": True}
+        assert status.json()["provider"]["health"]["state"] == "available"
+        assert status.json()["provider"]["health"]["checked_at"] > 0
         assert transport.requests[0]["method"] == "GET"
         assert transport.requests[0]["url"] == "http://localhost:9000/v1/models"
         assert disabled.status_code == 200

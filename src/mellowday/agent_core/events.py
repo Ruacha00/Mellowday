@@ -5,8 +5,6 @@ from __future__ import annotations
 import time
 from collections import deque
 from collections.abc import Callable
-from typing import cast
-
 from .types import EventType, RuntimeEvent
 
 
@@ -51,14 +49,14 @@ class RuntimeEventLog:
         *,
         since: int = 0,
         limit: int = 100,
-        event_type: str = "",
+        event_type: EventType | None = None,
         conversation_id: str = "",
     ) -> tuple[RuntimeEvent, ...]:
         matched = [
             event
             for event in self._events
             if event.sequence > since
-            and (not event_type or event.type == cast(EventType, event_type))
+            and (event_type is None or event.type == event_type)
             and (
                 not conversation_id
                 or event.conversation_id == conversation_id

@@ -11,7 +11,7 @@ from mellowday.web_app import create_app
 def test_settings_status_is_role_free_and_never_exposes_provider_credentials(
     tmp_path: Path,
 ) -> None:
-    async def exercise_boundary() -> tuple[int, dict[str, object], str]:
+    async def exercise_boundary() -> tuple[int, dict[str, object], str, str]:
         app = create_app(
             conversation_database_path=tmp_path / "mellowday.sqlite3",
             audit_path=None,
@@ -36,10 +36,11 @@ def test_settings_status_is_role_free_and_never_exposes_provider_credentials(
                 json={"conversation_id": "main", "content": "hello"},
             )
             response = await client.get("/api/settings/status")
-        return response.status_code, response.json(), response.text
+        return response.status_code, response.json(), response.text, provider_id
 
-    status_code, payload, response_text = asyncio.run(exercise_boundary())
-    provider_id = str(payload.get("provider", {}).get("id", ""))
+    status_code, payload, response_text, provider_id = asyncio.run(
+        exercise_boundary()
+    )
     assert status_code == 200
     assert payload["backend"] == {"ok": True, "service": "mellowday"}
     assert payload["provider"] == {
@@ -48,6 +49,7 @@ def test_settings_status_is_role_free_and_never_exposes_provider_credentials(
         "id": provider_id,
         "model": "small-model",
         "name": "Local model",
+        "health": {"state": "not_checked"},
     }
     assert payload["sessions"] == 1
     assert payload["single_user"] is True

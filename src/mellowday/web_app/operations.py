@@ -27,7 +27,11 @@ class LogRingBuffer(logging.Handler):
 
     @property
     def cursor(self) -> int:
-        return self._sequence
+        self.acquire()
+        try:
+            return self._sequence
+        finally:
+            self.release()
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -54,9 +58,14 @@ class LogRingBuffer(logging.Handler):
     ) -> tuple[dict[str, object], ...]:
         minimum_rank = _LEVELS.get(minimum_level.upper(), 0)
         needle = contains.casefold()
+        self.acquire()
+        try:
+            records = tuple(self._records)
+        finally:
+            self.release()
         matched = [
             item
-            for item in tuple(self._records)
+            for item in records
             if cast(int, item["sequence"]) > since
             and _LEVELS.get(str(item["level"]), 0) >= minimum_rank
             and (

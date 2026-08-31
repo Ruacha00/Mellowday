@@ -515,7 +515,7 @@ def test_user_can_operate_and_diagnose_from_integrated_settings(
         page.get_by_role("button", name="Settings").click()
         expect(page.get_by_role("heading", name="Service status")).to_be_visible()
         expect(page.get_by_text("Healthy", exact=True)).to_be_visible()
-        expect(page.get_by_text("fake", exact=True)).to_be_visible()
+        expect(page.get_by_text("fake · Not Checked", exact=True)).to_be_visible()
         expect(page.get_by_text("1 conversation", exact=True)).to_be_visible()
 
         page.get_by_label("Diagnostic input").fill("probe the core")
@@ -533,16 +533,15 @@ def test_user_can_operate_and_diagnose_from_integrated_settings(
             "turn_completed"
         )
 
+        page.get_by_label("Minimum log level").select_option("WARNING")
+        page.get_by_label("Log search").fill("marker")
         logging.getLogger("mellowday.browser_test").warning(
             "browser diagnostics marker"
         )
-        page.get_by_label("Minimum log level").select_option("WARNING")
-        page.get_by_label("Log search").fill("marker")
-        page.get_by_role("button", name="Refresh runtime logs").click()
         expect(page.locator("#runtime-log-list")).to_contain_text(
             "browser diagnostics marker"
         )
         page.route("**/api/logs/recent*", lambda route: route.abort())
         page.get_by_role("button", name="Refresh runtime logs").click()
-        expect(page.locator("#settings-status")).to_contain_text("unavailable.")
+        expect(page.locator("#settings-status")).to_contain_text("unavailable:")
         browser.close()

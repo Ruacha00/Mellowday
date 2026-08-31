@@ -839,7 +839,12 @@ async function loadOperationStatus() {
   if (!response.ok) throw new Error(`Request failed with ${response.status}`);
   const payload = await response.json();
   backendStatus.textContent = payload.backend.ok ? "Healthy" : "Unavailable";
-  providerStatus.textContent = payload.provider.name;
+  const health = payload.provider.health?.state || "not_checked";
+  const healthLabel = health
+    .split("_")
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+  providerStatus.textContent = `${payload.provider.name} · ${healthLabel}`;
   sessionStatus.textContent = `${payload.sessions} conversation${
     payload.sessions === 1 ? "" : "s"
   }`;
@@ -847,6 +852,9 @@ async function loadOperationStatus() {
 
 function appendRuntimeRecords(list, records, formatter, replace) {
   if (replace) list.replaceChildren();
+  if (!replace && records.length > 0) {
+    list.querySelector(".empty-capability")?.remove();
+  }
   for (const record of records) {
     const item = document.createElement("li");
     item.className = "runtime-record";
@@ -926,7 +934,7 @@ refreshOperations.addEventListener("click", async () => {
     await loadOperations();
     settingsStatus.textContent = "Operational data is up to date.";
   } catch (error) {
-    settingsStatus.textContent = "Operational data is unavailable.";
+    settingsStatus.textContent = `Operational data is unavailable: ${error.message}`;
   }
 });
 
@@ -934,7 +942,7 @@ refreshEvents.addEventListener("click", async () => {
   try {
     await loadRuntimeEvents();
   } catch (error) {
-    settingsStatus.textContent = "Runtime events are unavailable.";
+    settingsStatus.textContent = `Runtime events are unavailable: ${error.message}`;
   }
 });
 
@@ -942,7 +950,7 @@ refreshLogs.addEventListener("click", async () => {
   try {
     await loadRuntimeLogs();
   } catch (error) {
-    settingsStatus.textContent = "Runtime logs are unavailable.";
+    settingsStatus.textContent = `Runtime logs are unavailable: ${error.message}`;
   }
 });
 
@@ -964,7 +972,7 @@ diagnosticForm.addEventListener("submit", async (event) => {
     } ms · ${payload.turn.chat_content.content}`;
     await Promise.all([loadOperationStatus(), loadRuntimeEvents()]);
   } catch (error) {
-    diagnosticResult.textContent = "Diagnostic probe failed.";
+    diagnosticResult.textContent = `Diagnostic probe failed: ${error.message}`;
   } finally {
     button.disabled = false;
   }
@@ -1051,7 +1059,9 @@ settingsToggle.addEventListener("click", () => {
         loadRuntimeLogs({ incremental: true }),
       ]);
     } catch (error) {
-      settingsStatus.textContent = "Live operational updates are unavailable.";
+      settingsStatus.textContent = `Live operational updates are unavailable: ${
+        error.message
+      }`;
     }
   }, 1500);
 });

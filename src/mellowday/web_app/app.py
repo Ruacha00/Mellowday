@@ -21,6 +21,7 @@ from mellowday.agent_core import (
     ConfirmationError,
     ConfirmationErrorCode,
     ConversationHistoryError,
+    EventType,
     ModelProvider,
     ProviderFailure,
     RuntimeEventLog,
@@ -154,6 +155,7 @@ def create_app(
     )
     persona_store = SQLitePersonaStore(database_path)
     provider_store = SQLiteProviderConfigurationStore(database_path)
+    provider_health: dict[str, dict[str, object]] = {}
     configured_provider_transport = provider_transport or HttpxProviderTransport()
     if provider is None:
         selected_provider: ModelProvider = SelectedProvider(
@@ -184,10 +186,8 @@ def create_app(
         skill_state_path=None,
         audit_path=None,
         conversation_history=None,
-        system_instructions_provider=lambda: persona_store.get().chat_instructions(),
-        provider_failure_content_provider=(
-            lambda error: persona_store.get().provider_failure_chat_content(error.code)
-        ),
+        system_instructions_provider=None,
+        provider_failure_content_provider=lambda _error: "Provider call failed.",
         runtime_events=runtime_events,
     )
     diagnostic_lock = asyncio.Lock()
@@ -226,12 +226,16 @@ def create_app(
                 "model": selected_configuration.model,
                 "enabled": selected_configuration.enabled,
                 "configured": True,
+                "health": provider_health.get(
+                    selected_configuration.id, {"state": "not_checked"}
+                ),
             }
         else:
             provider_status = {
                 "name": selected_provider.name,
                 "configured": provider is not None,
                 "enabled": provider is not None,
+                "health": {"state": "not_checked"},
             }
         return {
             "backend": {"ok": True, "service": "mellowday"},
@@ -331,7 +335,11 @@ def create_app(
                     status_code=503,
                     detail={"code": "diagnostic_probe_failed"},
                 ) from error
-            events = runtime_events.query(since=cursor, limit=200)
+            events = runtime_events.query(
+                since=cursor,
+                limit=200,
+                conversation_id="diagnostic-probe",
+            )
         return {
             "turn": asdict(result),
             "duration_ms": int((time.monotonic() - started) * 1_000),
@@ -433,6 +441,7 @@ def create_app(
         configuration = provider_store.update(provider_id, **body.model_dump())
         if configuration is None:
             raise HTTPException(status_code=404, detail="Provider not found")
+        provider_health.pop(provider_id, None)
         return {"provider": configuration.settings_payload()}
 
     @app.post("/api/settings/providers/{provider_id}/select")
@@ -455,6 +464,11 @@ def create_app(
         try:
             await adapter.validate()
         except ProviderFailure as error:
+            provider_health[provider_id] = {
+                "state": "unavailable",
+                "code": error.code,
+                "checked_at": time.time(),
+            }
             return {
                 "valid": False,
                 "failure": {
@@ -463,6 +477,10 @@ def create_app(
                     "attempts": error.attempts,
                 },
             }
+        provider_health[provider_id] = {
+            "state": "available",
+            "checked_at": time.time(),
+        }
         return {"valid": True}
 
     @app.put("/api/settings/providers/{provider_id}/enabled")
@@ -498,7 +516,7 @@ def create_app(
     async def recent_events(
         since: int = Query(default=0, ge=0),
         limit: int = Query(default=100, ge=1, le=200),
-        event_type: str = Query(default="", alias="type"),
+        event_type: EventType | None = Query(default=None, alias="type"),
         conversation_id: str = "",
     ) -> dict[str, object]:
         events = runtime_events.query(
