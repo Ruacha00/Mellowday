@@ -171,6 +171,52 @@
           </form>
         </section>
 
+        <section class="task-settings" aria-labelledby="memory-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Durable User information</p>
+              <h3 id="memory-settings-title">Memory</h3>
+              <p class="capability-description">
+                Inspect and correct durable preferences, facts, and important matters.
+                Memory remains separate from Conversation History and Life Records.
+              </p>
+            </div>
+            <span class="local-badge">Local Memory</span>
+          </header>
+
+          <form id="memory-form" class="task-form" hidden>
+            <input name="memory_id" type="hidden" />
+            <label>
+              <span>Memory content</span>
+              <textarea name="content" rows="3" required aria-label="Memory content"></textarea>
+            </label>
+            <label>
+              <span>Memory kind</span>
+              <select name="kind" aria-label="Memory kind">
+                <option value="preference">Preference</option>
+                <option value="fact">Fact</option>
+                <option value="important">Important matter</option>
+              </select>
+            </label>
+            <div class="task-form-actions">
+              <button type="submit">Save Memory</button>
+              <button id="cancel-memory-edit" class="text-button" type="button">
+                Cancel edit
+              </button>
+            </div>
+          </form>
+          <label class="note-search">
+            <span>Search Memory</span>
+            <input
+              id="memory-search"
+              type="search"
+              autocomplete="off"
+              aria-label="Search Memory"
+            />
+          </label>
+          <div id="memory-list" class="task-list" aria-live="polite"></div>
+        </section>
+
         <section class="task-settings" aria-labelledby="task-settings-title">
           <header class="history-settings-heading">
             <div>

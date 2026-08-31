@@ -41,6 +41,9 @@ from mellowday.personal_assistant import (
     CalendarEventChange,
     CalendarEventUpdates,
     CalendarEventValidationError,
+    MemoryChange,
+    MemoryUpdates,
+    MemoryValidationError,
     NoteChange,
     NoteChangeNotificationError,
     NoteUpdates,
@@ -52,6 +55,7 @@ from mellowday.personal_assistant import (
     ReminderUpdates,
     ReminderValidationError,
     SQLiteCalendarEventService,
+    SQLiteMemoryService,
     SQLiteNoteService,
     SQLitePersonaStore,
     SQLiteReminderService,
@@ -60,6 +64,7 @@ from mellowday.personal_assistant import (
     TaskUpdates,
     TaskValidationError,
     build_calendar_event_tools,
+    build_memory_tools,
     build_note_tools,
     build_reminder_tools,
     build_task_tools,
@@ -186,6 +191,11 @@ class CalendarEventUpdateBody(BaseModel):
     details: str | None = None
 
 
+class MemoryUpdateBody(BaseModel):
+    content: str | None = Field(default=None, min_length=1)
+    kind: Literal["preference", "fact", "important"] | None = None
+
+
 def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
     return ConfirmationBinding(
         user_id=body.user_id,
@@ -294,6 +304,18 @@ def create_app(
         change_listener=record_calendar_event_change,
     )
 
+    def record_memory_change(change: MemoryChange) -> None:
+        agent_core_reference[0].record_application_action(
+            action=change.operation,
+            resource_type="memory",
+            resource_id=change.memory_id,
+            conversation_id=change.conversation_id,
+        )
+
+    memory_service = SQLiteMemoryService(
+        database_path, change_listener=record_memory_change
+    )
+
     def calendar_event_payload(event: CalendarEvent) -> dict[str, object]:
         return {
             "calendar_event": asdict(event),
@@ -304,6 +326,7 @@ def create_app(
         }
 
     registered_tools = (
+        *build_memory_tools(memory_service),
         *build_task_tools(task_service),
         *build_note_tools(note_service),
         *build_reminder_tools(reminder_service),
@@ -329,6 +352,11 @@ def create_app(
         history_message_limit=history_message_limit,
         history_character_limit=history_character_limit,
         system_instructions_provider=lambda: persona_store.get().chat_instructions(),
+        context_instructions_provider=lambda messages: (
+            memory_service.context_instructions(messages[-1].content)
+            if messages
+            else ""
+        ),
         provider_failure_content_provider=(
             lambda error: persona_store.get().provider_failure_chat_content(error.code)
         ),
@@ -454,6 +482,17 @@ def create_app(
                     "code": "invalid_calendar_event",
                     "message": str(error),
                 }
+            },
+        )
+
+    @app.exception_handler(MemoryValidationError)
+    async def memory_validation_error(
+        _request: Request, error: MemoryValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {"code": "invalid_memory", "message": str(error)}
             },
         )
 
@@ -800,6 +839,83 @@ def create_app(
     async def update_persona(body: PersonaBody) -> dict[str, object]:
         persona = persona_store.update(Persona(**body.model_dump()))
         return {"persona": asdict(persona)}
+
+    @app.get("/api/settings/memories")
+    async def list_memories(
+        query: str = Query(default="", alias="q"),
+    ) -> dict[str, object]:
+        return {
+            "memories": [asdict(memory) for memory in memory_service.list(query)]
+        }
+
+    @app.patch("/api/settings/memories/{memory_id}")
+    async def update_memory(
+        memory_id: str, body: MemoryUpdateBody
+    ) -> dict[str, object]:
+        updates = cast(MemoryUpdates, body.model_dump(exclude_unset=True))
+        if "content" in updates and updates["content"] is None:
+            raise MemoryValidationError("content must not be null")
+        if "kind" in updates and updates["kind"] is None:
+            raise MemoryValidationError("kind must not be null")
+        memory = memory_service.update(
+            memory_id,
+            **updates,
+            conversation_id="settings",
+        )
+        if memory is None:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        return {"memory": asdict(memory)}
+
+    @app.post("/api/settings/memories/{memory_id}/delete-confirmation")
+    async def request_memory_delete_confirmation(
+        memory_id: str,
+    ) -> dict[str, object]:
+        if memory_service.get(memory_id) is None:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        confirmation, event = agent_core.request_application_confirmation(
+            user_id="local-user",
+            conversation_id="settings",
+            action="memory_forget",
+            arguments={"memory_id": memory_id},
+        )
+        return {"confirmation": asdict(confirmation), "event": asdict(event)}
+
+    @app.delete("/api/settings/memories/{memory_id}")
+    async def delete_memory(
+        memory_id: str, body: ApplicationConfirmationDecisionBody
+    ) -> dict[str, object]:
+        if (
+            body.binding.tool != "memory_forget"
+            or body.binding.arguments != {"memory_id": memory_id}
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Confirmation is bound to a different Memory action",
+            )
+        try:
+            decision, event = agent_core.decide_application_confirmation(
+                ConfirmationDecision(
+                    confirmation_id=body.confirmation_id,
+                    binding=_confirmation_binding(body.binding),
+                    decision=body.decision,
+                )
+            )
+        except ConfirmationError as error:
+            raise HTTPException(
+                status_code=_confirmation_status_code(error.code),
+                detail="Confirmation is unavailable for this decision",
+            ) from error
+        if decision == "reject":
+            return {"ok": False, "decision": decision, "event": asdict(event)}
+        memory = memory_service.delete(memory_id, conversation_id="settings")
+        if memory is None:
+            raise HTTPException(status_code=404, detail="Memory not found")
+        return {
+            "ok": True,
+            "decision": decision,
+            "deleted_memory": asdict(memory),
+            "event": asdict(event),
+        }
 
     @app.get("/api/settings/tasks")
     async def list_tasks() -> dict[str, object]:

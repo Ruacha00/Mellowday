@@ -52,6 +52,10 @@ const noteForm = document.querySelector("#note-form");
 const noteList = document.querySelector("#note-list");
 const noteSearch = document.querySelector("#note-search");
 const cancelNoteEdit = document.querySelector("#cancel-note-edit");
+const memoryForm = document.querySelector("#memory-form");
+const memoryList = document.querySelector("#memory-list");
+const memorySearch = document.querySelector("#memory-search");
+const cancelMemoryEdit = document.querySelector("#cancel-memory-edit");
 const reminderForm = document.querySelector("#reminder-form");
 const reminderList = document.querySelector("#reminder-list");
 const cancelReminderEdit = document.querySelector("#cancel-reminder-edit");
@@ -514,6 +518,124 @@ function resetTaskForm() {
   taskForm.querySelector('button[type="submit"]').textContent = "Add Task";
   cancelTaskEdit.hidden = true;
 }
+
+function resetMemoryForm() {
+  memoryForm.reset();
+  memoryForm.elements.namedItem("memory_id").value = "";
+  memoryForm.hidden = true;
+}
+
+function editMemory(memory) {
+  memoryForm.elements.namedItem("memory_id").value = memory.id;
+  memoryForm.elements.namedItem("content").value = memory.content;
+  memoryForm.elements.namedItem("kind").value = memory.kind;
+  memoryForm.hidden = false;
+  memoryForm.elements.namedItem("content").focus();
+}
+
+function memoryAction(label, memory, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = label;
+  button.setAttribute("aria-label", `${label} ${memory.content}`);
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function renderMemories(memories) {
+  memoryList.replaceChildren();
+  if (memories.length === 0) {
+    memoryList.append(
+      makeEmptyState(memorySearch.value ? "No matching Memory." : "No Memory yet."),
+    );
+    return;
+  }
+  for (const memory of memories) {
+    const card = document.createElement("article");
+    card.className = "capability-card task-card";
+    const content = document.createElement("strong");
+    content.textContent = memory.content;
+    const facts = document.createElement("p");
+    facts.className = "task-deadline";
+    facts.textContent =
+      `${memory.kind} / ${memory.provenance} / Updated ${formatUpdatedAt(memory.updated_at)}`;
+    const actions = document.createElement("div");
+    actions.className = "task-actions";
+    actions.append(
+      memoryAction("Edit", memory, () => editMemory(memory)),
+      memoryAction("Delete", memory, async () => {
+        if (!window.confirm(`Permanently forget ${memory.content}?`)) return;
+        const path = `/api/settings/memories/${encodeURIComponent(memory.id)}`;
+        const requested = await fetch(`${path}/delete-confirmation`, {
+          method: "POST",
+        });
+        if (!requested.ok) {
+          settingsStatus.textContent = "Memory could not be deleted.";
+          return;
+        }
+        const { confirmation } = await requested.json();
+        const response = await fetch(path, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmation_id: confirmation.id,
+            binding: confirmation.binding,
+            decision: "accept",
+          }),
+        });
+        if (!response.ok) {
+          settingsStatus.textContent = "Memory delete confirmation is unavailable.";
+          return;
+        }
+        settingsStatus.textContent = "Memory deleted.";
+        resetMemoryForm();
+        memorySearch.value = "";
+        await loadMemories();
+      }),
+    );
+    card.append(content, facts, actions);
+    memoryList.append(card);
+  }
+}
+
+async function loadMemories() {
+  const query = memorySearch.value.trim();
+  const response = await fetch(
+    `/api/settings/memories?q=${encodeURIComponent(query)}`,
+  );
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderMemories(payload.memories);
+}
+
+memoryForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const memoryId = memoryForm.elements.namedItem("memory_id").value;
+  if (!memoryId) return;
+  const response = await fetch(
+    `/api/settings/memories/${encodeURIComponent(memoryId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: memoryForm.elements.namedItem("content").value,
+        kind: memoryForm.elements.namedItem("kind").value,
+      }),
+    },
+  );
+  if (!response.ok) {
+    settingsStatus.textContent = "Memory could not be saved.";
+    return;
+  }
+  settingsStatus.textContent = "Memory saved.";
+  resetMemoryForm();
+  memorySearch.value = "";
+  await loadMemories();
+});
+
+cancelMemoryEdit.addEventListener("click", resetMemoryForm);
+memorySearch.addEventListener("input", loadMemories);
 
 function editTask(task) {
   taskForm.elements.namedItem("task_id").value = task.id;
@@ -1628,6 +1750,7 @@ async function loadSettings() {
   try {
     await Promise.all([
       loadPersona(),
+      loadMemories(),
       loadTasks(),
       loadNotes(),
       loadReminders(),

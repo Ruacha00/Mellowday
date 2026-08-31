@@ -207,3 +207,80 @@ def test_provider_failure_after_confirmation_is_normalized() -> None:
     assert resumed.chat_content.content == "The Provider timed out."
     assert resumed.events[-2].type == "provider_failed"
     assert resumed.events[-2].details["code"] == "timeout"
+
+
+def test_agent_core_rejects_tool_evidence_not_grounded_in_user_messages() -> None:
+    executions: list[dict[str, object]] = []
+
+    async def learn(
+        arguments: dict[str, object], _conversation_id: str
+    ) -> dict[str, object]:
+        executions.append(arguments)
+        return {"saved": True}
+
+    class EvidenceProvider:
+        name = "evidence-script"
+
+        def __init__(self) -> None:
+            self.replies = iter(
+                (
+                    ProviderReply(
+                        tool_calls=(
+                            ToolCall(
+                                "invented-evidence",
+                                "learn_fact",
+                                {
+                                    "content": "I prefer tea.",
+                                    "evidence": "I prefer tea.",
+                                },
+                            ),
+                        )
+                    ),
+                    ProviderReply(
+                        content="I did not save an unsupported fact."
+                    ),
+                )
+            )
+
+        async def complete(self, _request: ProviderRequest) -> ProviderReply:
+            return next(self.replies)
+
+    provider = EvidenceProvider()
+    core = AgentCore(
+        provider=provider,
+        tools=(
+            Tool(
+                name="learn_fact",
+                description="Save a directly supported User fact.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string"},
+                        "evidence": {"type": "string"},
+                    },
+                    "required": ["content", "evidence"],
+                },
+                executor=learn,
+                user_evidence_argument="evidence",
+            ),
+        ),
+        audit_path=None,
+    )
+
+    result = asyncio.run(
+        core.run_turn(
+            TurnRequest(
+                conversation_id="main",
+                messages=(
+                    ChatContent(role="user", content="The cafe closes at nine."),
+                ),
+            )
+        )
+    )
+
+    assert result.chat_content.content == "I did not save an unsupported fact."
+    assert executions == []
+    failures = [
+        event for event in result.events if event.type == "tool_execution_failed"
+    ]
+    assert failures[-1].details["error"] == "ungrounded_evidence"

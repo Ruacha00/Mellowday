@@ -55,6 +55,7 @@ class Tool:
     permission_requirements: tuple[str, ...] = ()
     side_effect: SideEffectClassification = "none"
     risk: RiskClassification = "low"
+    user_evidence_argument: str | None = None
 
     def __post_init__(self) -> None:
         if _TOOL_NAME.fullmatch(self.name) is None:
@@ -74,6 +75,15 @@ class Tool:
         schema.setdefault("properties", {})
         if schema["type"] != "object":
             raise ValueError("Tool input schema must describe an object")
+        if self.user_evidence_argument is not None:
+            properties = schema.get("properties", {})
+            if (
+                not isinstance(properties, Mapping)
+                or self.user_evidence_argument not in properties
+            ):
+                raise ValueError(
+                    "user evidence argument must be declared in the input schema"
+                )
         object.__setattr__(self, "input_schema", schema)
         object.__setattr__(
             self,

@@ -10,6 +10,17 @@ from .calendar_events import (
     CalendarEventValidationError,
     SQLiteCalendarEventService,
 )
+from .memories import (
+    Memory,
+    MemoryChange,
+    MemoryKind,
+    MemoryNotFoundError,
+    MemoryProvenance,
+    MemoryUpdates,
+    MemoryValidationError,
+    SQLiteMemoryService,
+)
+from .memory_tools import build_memory_tools
 from .calendar_event_tools import build_calendar_event_tools
 from .persona import Persona, SQLitePersonaStore
 from .note_tools import build_note_tools
@@ -53,6 +64,13 @@ __all__ = [
     "CalendarEventTimeClarificationRequired",
     "CalendarEventUpdates",
     "CalendarEventValidationError",
+    "Memory",
+    "MemoryChange",
+    "MemoryKind",
+    "MemoryNotFoundError",
+    "MemoryProvenance",
+    "MemoryUpdates",
+    "MemoryValidationError",
     "Persona",
     "Note",
     "NoteChange",
@@ -71,6 +89,7 @@ __all__ = [
     "ReminderValidationError",
     "SQLitePersonaStore",
     "SQLiteCalendarEventService",
+    "SQLiteMemoryService",
     "SQLiteNoteService",
     "SQLiteReminderService",
     "SQLiteTaskService",
@@ -81,6 +100,7 @@ __all__ = [
     "TaskValidationError",
     "build_task_tools",
     "build_calendar_event_tools",
+    "build_memory_tools",
     "build_note_tools",
     "build_reminder_tools",
 ]

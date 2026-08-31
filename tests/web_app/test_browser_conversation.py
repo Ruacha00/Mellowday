@@ -362,6 +362,66 @@ def test_user_can_manage_and_search_notes_from_settings(tmp_path: Path) -> None:
         browser.close()
 
 
+def test_user_can_search_correct_and_forget_memory_from_settings(
+    tmp_path: Path,
+) -> None:
+    class MemoryProvider:
+        name = "memory-browser-script"
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            if request.tool_results:
+                return ProviderReply(content="I'll remember that.")
+            return ProviderReply(
+                tool_calls=(
+                    ToolCall(
+                        "remember-browser",
+                        "memory_remember",
+                        {
+                            "content": "I prefer concise replies.",
+                            "kind": "preference",
+                            "provenance": "explicit",
+                        },
+                    ),
+                )
+            )
+
+    app = create_app(
+        provider=MemoryProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(base_url)
+        page.get_by_label("Message").fill("Remember my reply preference.")
+        page.get_by_role("button", name="Send").click()
+        expect(page.locator('[data-role="assistant"] p').last).to_have_text(
+            "I'll remember that."
+        )
+
+        page.get_by_role("button", name="Settings").click()
+        expect(page.get_by_role("heading", name="Memory", exact=True)).to_be_visible()
+        page.get_by_label("Search Memory").fill("concise")
+        expect(page.locator("#memory-list")).to_contain_text(
+            "I prefer concise replies."
+        )
+        page.get_by_role("button", name="Edit I prefer concise replies.").click()
+        page.get_by_label("Memory content").fill("I prefer detailed replies.")
+        page.get_by_role("button", name="Save Memory").click()
+        expect(page.locator("#settings-status")).to_have_text("Memory saved.")
+        expect(page.locator("#memory-list")).to_contain_text(
+            "I prefer detailed replies."
+        )
+
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="Delete I prefer detailed replies.").click()
+        expect(page.locator("#settings-status")).to_have_text("Memory deleted.")
+        expect(page.locator("#memory-list")).to_contain_text("No Memory yet.")
+        browser.close()
+
+
 def test_user_can_manage_reminders_from_settings(tmp_path: Path) -> None:
     app = create_app(
         provider=FakeProvider(),
