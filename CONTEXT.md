@@ -1,6 +1,6 @@
-# Personal Daily Assistant
+# Mellowday
 
-This context describes a self-hosted assistant for one user. It combines long-term conversational companionship with practical daily-life management while keeping its persona, memories, and life records conceptually distinct.
+Mellowday (悠日) is a self-hosted assistant for one user. It combines long-term conversational companionship with practical daily-life management while keeping its persona, memories, and life records conceptually distinct.
 
 ## People and identity
 

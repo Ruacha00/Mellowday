@@ -1,8 +1,8 @@
-# Product Direction
+# Mellowday Product Direction
 
 ## Purpose
 
-Build a self-hosted personal daily assistant for one user. The product has two equally important responsibilities: provide sustained conversational companionship and emotional value, and help the user manage everyday commitments without turning every conversation into a workflow.
+Build Mellowday (悠日), a self-hosted personal daily assistant for one user. The product has two equally important responsibilities: provide sustained conversational companionship and emotional value, and help the user manage everyday commitments without turning every conversation into a workflow.
 
 The assistant should feel like a consistent person during conversation. That personality must not obscure the truth of system state, permissions, stored data, or failures.
 
