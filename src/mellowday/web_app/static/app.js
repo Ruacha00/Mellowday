@@ -553,12 +553,26 @@ function renderTasks(tasks) {
       taskAction("Edit", task, () => editTask(task)),
       taskAction("Delete", task, async () => {
         if (!window.confirm(`Permanently delete ${task.title}?`)) return;
-        const response = await fetch(
-          `/api/settings/tasks/${encodeURIComponent(task.id)}`,
-          { method: "DELETE" },
-        );
-        if (!response.ok) {
+        const path = `/api/settings/tasks/${encodeURIComponent(task.id)}`;
+        const requested = await fetch(`${path}/delete-confirmation`, {
+          method: "POST",
+        });
+        if (!requested.ok) {
           settingsStatus.textContent = "Task could not be deleted.";
+          return;
+        }
+        const { confirmation } = await requested.json();
+        const response = await fetch(path, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmation_id: confirmation.id,
+            binding: confirmation.binding,
+            decision: "accept",
+          }),
+        });
+        if (!response.ok) {
+          settingsStatus.textContent = "Task delete confirmation is unavailable.";
           return;
         }
         settingsStatus.textContent = "Task deleted.";

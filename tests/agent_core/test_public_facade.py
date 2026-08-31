@@ -1,9 +1,12 @@
 import asyncio
 
+import pytest
+
 from mellowday.agent_core import (
     AgentCore,
     ChatContent,
     ConfirmationDecision,
+    ConfirmationError,
     FakeProvider,
     ProviderReply,
     ProviderRequest,
@@ -66,6 +69,38 @@ def test_public_facade_records_product_neutral_application_actions() -> None:
         "resource_id": "task-1",
     }
     assert core.list_audit_events() == (event,)
+
+
+def test_public_facade_binds_one_time_application_action_confirmation() -> None:
+    core = AgentCore(provider=FakeProvider(), clock=lambda: 42.0)
+    pending, requested = core.request_application_confirmation(
+        user_id="local-user",
+        conversation_id="settings",
+        action="task_delete",
+        arguments={"task_id": "task-1"},
+    )
+
+    decision, decided = core.decide_application_confirmation(
+        ConfirmationDecision(
+            confirmation_id=pending.id,
+            binding=pending.binding,
+            decision="accept",
+        )
+    )
+
+    assert decision == "accept"
+    assert pending.binding.tool == "task_delete"
+    assert pending.binding.arguments == {"task_id": "task-1"}
+    assert requested.type == "confirmation_pending"
+    assert decided.type == "confirmation_accepted"
+    with pytest.raises(ConfirmationError, match="already_decided"):
+        core.decide_application_confirmation(
+            ConfirmationDecision(
+                confirmation_id=pending.id,
+                binding=pending.binding,
+                decision="accept",
+            )
+        )
 
 
 def test_provider_failure_returns_truthful_chat_and_safe_diagnostics() -> None:

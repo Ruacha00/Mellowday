@@ -5,7 +5,7 @@ from typing import cast
 
 from mellowday.agent_core import Tool
 
-from .tasks import SQLiteTaskService, Task
+from .tasks import SQLiteTaskService, Task, TaskUpdates
 
 
 def build_task_tools(service: SQLiteTaskService) -> tuple[Tool, ...]:
@@ -28,14 +28,16 @@ def build_task_tools(service: SQLiteTaskService) -> tuple[Tool, ...]:
 
     async def update(arguments: dict[str, object], conversation_id: str) -> object:
         task_id = cast(str, arguments["task_id"])
-        current = service.get(task_id)
-        if current is None:
-            return _task_result(None)
+        updates: TaskUpdates = {}
+        if "title" in arguments:
+            updates["title"] = cast(str, arguments["title"])
+        if "details" in arguments:
+            updates["details"] = cast(str | None, arguments["details"])
+        if "deadline" in arguments:
+            updates["deadline"] = cast(str | None, arguments["deadline"])
         task = service.update(
             task_id,
-            title=cast(str, arguments.get("title", current.title)),
-            details=cast(str | None, arguments.get("details", current.details)),
-            deadline=cast(str | None, arguments.get("deadline", current.deadline)),
+            **updates,
             conversation_id=conversation_id,
         )
         return _task_result(task)
@@ -74,8 +76,8 @@ def build_task_tools(service: SQLiteTaskService) -> tuple[Tool, ...]:
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "minLength": 1},
-                    "details": {"type": "string"},
-                    "deadline": {"type": "string"},
+                    "details": {"type": ["string", "null"]},
+                    "deadline": {"type": ["string", "null"]},
                 },
                 "required": ["title"],
                 "additionalProperties": False,
@@ -110,8 +112,8 @@ def build_task_tools(service: SQLiteTaskService) -> tuple[Tool, ...]:
                 "properties": {
                     "task_id": {"type": "string", "minLength": 1},
                     "title": {"type": "string", "minLength": 1},
-                    "details": {"type": "string"},
-                    "deadline": {"type": "string"},
+                    "details": {"type": ["string", "null"]},
+                    "deadline": {"type": ["string", "null"]},
                 },
                 "required": ["task_id"],
                 "additionalProperties": False,

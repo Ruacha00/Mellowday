@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypedDict
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +37,12 @@ class TaskChange:
     task_id: str
     occurred_at: float
     conversation_id: str | None
+
+
+class TaskUpdates(TypedDict, total=False):
+    title: str
+    details: str | None
+    deadline: str | None
 
 
 _UNSET = object()
@@ -308,5 +314,6 @@ __all__ = [
     "Task",
     "TaskChange",
     "TaskOperation",
+    "TaskUpdates",
     "TaskValidationError",
 ]

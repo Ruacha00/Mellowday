@@ -39,6 +39,7 @@ from mellowday.personal_assistant import (
     SQLitePersonaStore,
     SQLiteTaskService,
     TaskChange,
+    TaskUpdates,
     TaskValidationError,
     build_task_tools,
 )
@@ -103,6 +104,10 @@ class ConfirmationDecisionBody(BaseModel):
 
 
 class ConversationResetDecisionBody(ConfirmationDecisionBody):
+    confirmation_id: str
+
+
+class ApplicationConfirmationDecisionBody(ConfirmationDecisionBody):
     confirmation_id: str
 
 
@@ -566,18 +571,12 @@ def create_app(
     async def update_task(
         task_id: str, body: TaskUpdateBody
     ) -> dict[str, object]:
-        current = task_service.get(task_id)
-        if current is None:
-            raise HTTPException(status_code=404, detail="Task not found")
-        fields = body.model_fields_set
-        title = body.title if "title" in fields else current.title
-        if title is None:
+        updates = cast(TaskUpdates, body.model_dump(exclude_unset=True))
+        if "title" in updates and updates["title"] is None:
             raise TaskValidationError("title must not be null")
         task = task_service.update(
             task_id,
-            title=title,
-            details=body.details if "details" in fields else current.details,
-            deadline=body.deadline if "deadline" in fields else current.deadline,
+            **updates,
         )
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -597,12 +596,56 @@ def create_app(
             raise HTTPException(status_code=404, detail="Task not found")
         return {"task": asdict(task)}
 
+    @app.post("/api/settings/tasks/{task_id}/delete-confirmation")
+    async def request_task_delete_confirmation(
+        task_id: str,
+    ) -> dict[str, object]:
+        if task_service.get(task_id) is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        confirmation, event = agent_core.request_application_confirmation(
+            user_id="local-user",
+            conversation_id="settings",
+            action="task_delete",
+            arguments={"task_id": task_id},
+        )
+        return {"confirmation": asdict(confirmation), "event": asdict(event)}
+
     @app.delete("/api/settings/tasks/{task_id}")
-    async def delete_task(task_id: str) -> dict[str, object]:
+    async def delete_task(
+        task_id: str, body: ApplicationConfirmationDecisionBody
+    ) -> dict[str, object]:
+        if (
+            body.binding.tool != "task_delete"
+            or body.binding.arguments != {"task_id": task_id}
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Confirmation is bound to a different Task action",
+            )
+        try:
+            decision, event = agent_core.decide_application_confirmation(
+                ConfirmationDecision(
+                    confirmation_id=body.confirmation_id,
+                    binding=_confirmation_binding(body.binding),
+                    decision=body.decision,
+                )
+            )
+        except ConfirmationError as error:
+            raise HTTPException(
+                status_code=_confirmation_status_code(error.code),
+                detail="Confirmation is unavailable for this decision",
+            ) from error
+        if decision == "reject":
+            return {"ok": False, "decision": decision, "event": asdict(event)}
         task = task_service.delete(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        return {"deleted_task": asdict(task)}
+        return {
+            "ok": True,
+            "decision": decision,
+            "deleted_task": asdict(task),
+            "event": asdict(event),
+        }
 
     @app.post("/api/conversations/{conversation_id}/reset-confirmation")
     async def request_reset_confirmation(

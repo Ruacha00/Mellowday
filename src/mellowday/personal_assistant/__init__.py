@@ -7,6 +7,7 @@ from .tasks import (
     Task,
     TaskChange,
     TaskOperation,
+    TaskUpdates,
     TaskValidationError,
 )
 
@@ -17,6 +18,7 @@ __all__ = [
     "Task",
     "TaskChange",
     "TaskOperation",
+    "TaskUpdates",
     "TaskValidationError",
     "build_task_tools",
 ]

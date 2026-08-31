@@ -22,6 +22,7 @@ _JSON_TYPES: dict[str, type[object] | tuple[type[object], ...]] = {
     "boolean": bool,
     "integer": int,
     "number": (int, float),
+    "null": type(None),
     "object": dict,
     "string": str,
 }
@@ -195,12 +196,14 @@ def _validate_object(
 
 def _validate_value(path: str, schema: Mapping[str, object], value: object) -> None:
     expected = schema.get("type")
-    python_type = _JSON_TYPES.get(expected) if isinstance(expected, str) else None
-    if python_type is not None:
-        if expected in {"integer", "number"} and isinstance(value, bool):
-            raise ToolArgumentsError(f"{path} must be {expected}")
-        if not isinstance(value, python_type):
-            raise ToolArgumentsError(f"{path} must be {expected}")
+    if isinstance(expected, str) and not _matches_json_type(expected, value):
+        raise ToolArgumentsError(f"{path} must be {expected}")
+    if isinstance(expected, (list, tuple)):
+        expected_types = [item for item in expected if isinstance(item, str)]
+        if not expected_types or not any(
+            _matches_json_type(item, value) for item in expected_types
+        ):
+            raise ToolArgumentsError(f"{path} must be one of {expected_types}")
     raw_enum = schema.get("enum")
     if isinstance(raw_enum, (list, tuple)) and value not in raw_enum:
         raise ToolArgumentsError(f"{path} must be one of {list(raw_enum)}")
@@ -236,6 +239,15 @@ def _validate_value(path: str, schema: Mapping[str, object], value: object) -> N
         items_schema = cast(Mapping[str, object], schema["items"])
         for index, item in enumerate(value):
             _validate_value(f"{path}[{index}]", items_schema, item)
+
+
+def _matches_json_type(expected: str, value: object) -> bool:
+    python_type = _JSON_TYPES.get(expected)
+    if python_type is None:
+        return True
+    if expected in {"integer", "number"} and isinstance(value, bool):
+        return False
+    return isinstance(value, python_type)
 
 
 __all__ = [

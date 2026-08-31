@@ -220,6 +220,50 @@ def test_tool_schema_length_and_range_constraints_are_enforced() -> None:
     ]
 
 
+def test_tool_schema_accepts_nullable_values() -> None:
+    executions: list[dict[str, object]] = []
+
+    async def record(arguments: dict[str, object], _conversation_id: str) -> object:
+        executions.append(arguments)
+        return arguments
+
+    tool = Tool(
+        name="clear_details",
+        description="Clear optional details.",
+        input_schema={
+            "type": "object",
+            "properties": {"details": {"type": ["string", "null"]}},
+            "required": ["details"],
+            "additionalProperties": False,
+        },
+        executor=record,
+    )
+    provider = ScriptedProvider(
+        (
+            ProviderReply(
+                tool_calls=(
+                    ToolCall("clear", "clear_details", {"details": None}),
+                    ToolCall("invalid", "clear_details", {"details": 42}),
+                )
+            ),
+            ProviderReply(content="Cleared."),
+        )
+    )
+
+    result = asyncio.run(
+        AgentCore(provider=provider, tools=(tool,)).run_turn(
+            TurnRequest(
+                conversation_id="conversation-1",
+                messages=(ChatContent(role="user", content="Clear details."),),
+            )
+        )
+    )
+
+    assert result.chat_content.content == "Cleared."
+    assert executions == [{"details": None}]
+    assert provider.requests[1].tool_results[1].error == "invalid_arguments"
+
+
 def test_tool_rejects_unknown_side_effect_and_risk_classifications() -> None:
     async def execute(
         arguments: dict[str, object], conversation_id: str

@@ -374,7 +374,20 @@ def test_settings_task_api_manages_persistent_tasks_with_consistent_audit(
             )
             reopened = await client.post(f"/api/settings/tasks/{task_id}/reopen")
             listed = await client.get("/api/settings/tasks")
-            deleted = await client.delete(f"/api/settings/tasks/{task_id}")
+            unconfirmed = await client.delete(f"/api/settings/tasks/{task_id}")
+            confirmation_response = await client.post(
+                f"/api/settings/tasks/{task_id}/delete-confirmation"
+            )
+            confirmation = confirmation_response.json()["confirmation"]
+            deleted = await client.request(
+                "DELETE",
+                f"/api/settings/tasks/{task_id}",
+                json={
+                    "confirmation_id": confirmation["id"],
+                    "decision": "accept",
+                    "binding": confirmation["binding"],
+                },
+            )
             missing = await client.get(f"/api/settings/tasks/{task_id}")
             audit = await client.get("/api/settings/audit")
             capabilities = await client.get("/api/settings/capabilities")
@@ -390,6 +403,9 @@ def test_settings_task_api_manages_persistent_tasks_with_consistent_audit(
         assert reopened.json()["task"]["completed"] is False
         assert reopened.json()["task"]["completed_at"] is None
         assert listed.json()["tasks"] == [reopened.json()["task"]]
+        assert unconfirmed.status_code == 422
+        assert confirmation["binding"]["tool"] == "task_delete"
+        assert confirmation["binding"]["arguments"] == {"task_id": task_id}
         assert deleted.status_code == 200
         assert deleted.json()["deleted_task"]["id"] == task_id
         assert missing.status_code == 404
@@ -501,6 +517,128 @@ def test_chat_creates_a_task_only_when_the_provider_uses_the_registered_tool(
         assert not any("reminder" in name for name in tool_names)
 
     asyncio.run(exercise_boundary())
+
+
+def test_chat_runs_the_complete_task_tool_lifecycle_and_clarifies_ambiguity(
+    tmp_path: Path,
+) -> None:
+    class TaskLifecycleProvider:
+        name = "task-lifecycle-script"
+
+        def __init__(self) -> None:
+            self.task_id = ""
+            self.results: list[str] = []
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            if request.tool_results:
+                result = request.tool_results[-1]
+                if result.error == "ambiguous_intent":
+                    return ProviderReply(content="Would you like me to create a Task?")
+                self.results.append(result.name)
+                if result.name == "task_create":
+                    self.task_id = result.result["task"]["id"]
+                return ProviderReply(content=f"Finished {result.name}.")
+            command = request.messages[-1].content
+            calls = {
+                "mention": ToolCall(
+                    "ambiguous-create",
+                    "task_create",
+                    {"title": "Submit report"},
+                    intent_clarity="ambiguous",
+                ),
+                "create": ToolCall(
+                    "create", "task_create", {"title": "Submit report"}
+                ),
+                "retrieve": ToolCall(
+                    "retrieve", "task_get", {"task_id": self.task_id}
+                ),
+                "list": ToolCall("list", "task_list", {}),
+                "update": ToolCall(
+                    "update",
+                    "task_update",
+                    {
+                        "task_id": self.task_id,
+                        "title": "Send report",
+                        "details": None,
+                        "deadline": None,
+                    },
+                ),
+                "complete": ToolCall(
+                    "complete", "task_complete", {"task_id": self.task_id}
+                ),
+                "reopen": ToolCall(
+                    "reopen", "task_reopen", {"task_id": self.task_id}
+                ),
+                "delete": ToolCall(
+                    "delete", "task_delete", {"task_id": self.task_id}
+                ),
+            }
+            return ProviderReply(
+                content="Please confirm deletion." if command == "delete" else "",
+                tool_calls=(calls[command],),
+            )
+
+    provider = TaskLifecycleProvider()
+
+    async def exercise_boundary() -> None:
+        app = create_app(
+            provider=provider,
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            ambiguous = await client.post(
+                "/api/chat",
+                json={"conversation_id": "tasks", "content": "mention"},
+            )
+            assert ambiguous.json()["stop_reason"] == "clarification"
+            assert (await client.get("/api/settings/tasks")).json() == {"tasks": []}
+
+            for command in (
+                "create",
+                "retrieve",
+                "list",
+                "update",
+                "complete",
+                "reopen",
+            ):
+                response = await client.post(
+                    "/api/chat",
+                    json={"conversation_id": "tasks", "content": command},
+                )
+                assert response.json()["stop_reason"] == "final"
+
+            pending = await client.post(
+                "/api/chat",
+                json={"conversation_id": "tasks", "content": "delete"},
+            )
+            confirmation = pending.json()["confirmation"]
+            assert pending.json()["stop_reason"] == "confirmation_pending"
+            deleted = await client.post(
+                f"/api/settings/confirmations/{confirmation['id']}/decision",
+                json={
+                    "decision": "accept",
+                    "binding": confirmation["binding"],
+                },
+            )
+            remaining = await client.get("/api/settings/tasks")
+
+        assert deleted.json()["turn"]["stop_reason"] == "confirmation_accepted"
+        assert remaining.json() == {"tasks": []}
+
+    asyncio.run(exercise_boundary())
+
+    assert provider.results == [
+        "task_create",
+        "task_get",
+        "task_list",
+        "task_update",
+        "task_complete",
+        "task_reopen",
+        "task_delete",
+    ]
 
 
 def test_settings_lists_neutral_capability_metadata_without_loading_skills(

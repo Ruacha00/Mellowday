@@ -78,6 +78,9 @@ class AgentCore:
         self._history_reset_confirmations = ConfirmationStore(
             confirmation_ttl_seconds
         )
+        self._application_confirmations = ConfirmationStore(
+            confirmation_ttl_seconds
+        )
         self._conversation_history = conversation_history
         self._history_message_limit = history_message_limit
         self._history_character_limit = history_character_limit
@@ -148,6 +151,61 @@ class AgentCore:
             resource_type=resource_type,
             resource_id=resource_id,
         )
+
+    def request_application_confirmation(
+        self,
+        *,
+        user_id: str,
+        conversation_id: str,
+        action: str,
+        arguments: dict[str, object],
+    ) -> tuple[PendingConfirmation, RuntimeEvent]:
+        """Create a bound confirmation for an irreversible application action."""
+
+        binding = ConfirmationBinding(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            tool=action,
+            arguments=arguments,
+            initiating_context=(),
+        )
+        pending = self._application_confirmations.create(
+            binding=binding,
+            call_id="application-action",
+            granted_permissions=(),
+            prior_tool_results=(),
+            loaded_skills=(),
+            now=self._clock(),
+        )
+        event = self._runtime_event(
+            "confirmation_pending",
+            conversation_id=conversation_id,
+            confirmation_id=pending.id,
+            tool=action,
+            expires_at=pending.expires_at,
+        )
+        return pending, event
+
+    def decide_application_confirmation(
+        self, decision: ConfirmationDecision
+    ) -> tuple[ConfirmationDecisionValue, RuntimeEvent]:
+        """Resolve a bound application confirmation exactly once."""
+
+        resolution = self._application_confirmations.decide(
+            decision, now=self._clock()
+        )
+        event_type: EventType = (
+            "confirmation_accepted"
+            if resolution.decision == "accept"
+            else "confirmation_rejected"
+        )
+        event = self._runtime_event(
+            event_type,
+            conversation_id=resolution.pending.binding.conversation_id,
+            confirmation_id=resolution.pending.id,
+            tool=resolution.pending.binding.tool,
+        )
+        return resolution.decision, event
 
     def request_conversation_history_reset(
         self, *, user_id: str, conversation_id: str
