@@ -54,12 +54,15 @@ const cancelReminderEdit = document.querySelector("#cancel-reminder-edit");
 
 const activeConversationId = "main";
 const liveStartedAt = Date.now() / 1000;
+const deliveredReminderIds = new Set();
 window.setTimeout(() => {
   const liveConversation = new EventSource(
     `/api/conversations/${encodeURIComponent(activeConversationId)}/live?after=${liveStartedAt}`,
   );
   liveConversation.addEventListener("reminder", (event) => {
     const delivery = JSON.parse(event.data);
+    if (deliveredReminderIds.has(delivery.reminder_id)) return;
+    deliveredReminderIds.add(delivery.reminder_id);
     appendMessage(delivery.role, delivery.content);
     status.textContent = "Reminder delivered.";
   });

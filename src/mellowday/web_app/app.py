@@ -276,17 +276,20 @@ def create_app(
     live_backlog: dict[str, list[dict[str, object]]] = {}
 
     async def deliver_reminder(delivery: ReminderDelivery) -> None:
-        content = f"Reminder: {delivery.message}"
-        conversation_history.append(
+        content = persona_store.get().reminder_chat_content(delivery.message)
+        appended = conversation_history.append_once(
             delivery.conversation_id,
-            (ChatContent(role="assistant", content=content),),
+            ChatContent(role="assistant", content=content),
+            deduplication_key=f"reminder:{delivery.reminder_id}",
         )
+        if not appended:
+            return
         payload: dict[str, object] = {
             "reminder_id": delivery.reminder_id,
             "role": "assistant",
             "content": content,
             "due_at": delivery.due_at,
-            "occurred_at": reminder_clock(),
+            "occurred_at": time.time(),
         }
         backlog = live_backlog.setdefault(delivery.conversation_id, [])
         backlog.append(payload)

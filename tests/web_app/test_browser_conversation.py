@@ -4,7 +4,7 @@ import time
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
@@ -144,10 +144,12 @@ def test_due_reminder_is_delivered_live_once_and_survives_restart(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "mellowday.sqlite3"
+    now = 1_788_200_100.0
     app = create_app(
         provider=FakeProvider(),
         conversation_database_path=database_path,
         audit_path=None,
+        reminder_clock=lambda: now,
         reminder_poll_interval=0.05,
     )
 
@@ -155,26 +157,26 @@ def test_due_reminder_is_delivered_live_once_and_survives_restart(
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(base_url)
-        due_at = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+        due_at = datetime.fromtimestamp(now - 1, timezone.utc).isoformat()
         with Client(base_url=base_url) as client:
             created = client.post(
                 "/api/settings/reminders",
                 json={"message": "Join the call", "due_at": due_at},
             )
         assert created.status_code == 201
-        expect(page.get_by_text("Reminder: Join the call", exact=True)).to_be_visible(
-            timeout=5_000
-        )
+        expect(
+            page.get_by_text("Mellowday reminder: Join the call", exact=True)
+        ).to_be_visible(timeout=5_000)
         browser.close()
 
     restarted = create_app(
         provider=FakeProvider(),
         conversation_database_path=database_path,
         audit_path=None,
+        reminder_clock=lambda: now,
         reminder_poll_interval=0.05,
     )
     with running_server(restarted) as base_url:
-        time.sleep(0.15)
         with Client(base_url=base_url) as client:
             reminder = client.get("/api/settings/reminders").json()["reminders"][0]
             conversation = client.get("/api/conversations/main").json()
@@ -184,8 +186,8 @@ def test_due_reminder_is_delivered_live_once_and_survives_restart(
     assert [
         message["content"]
         for message in conversation["messages"]
-        if message["content"] == "Reminder: Join the call"
-    ] == ["Reminder: Join the call"]
+        if message["content"] == "Mellowday reminder: Join the call"
+    ] == ["Mellowday reminder: Join the call"]
 
 
 def test_conversation_surface_creates_a_task_through_the_registered_tool(

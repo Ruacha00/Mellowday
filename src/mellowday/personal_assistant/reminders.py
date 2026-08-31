@@ -11,7 +11,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-ReminderState = Literal["scheduled", "delivered", "failed", "dismissed", "cancelled"]
+ReminderState = Literal[
+    "scheduled", "delivering", "delivered", "failed", "dismissed", "cancelled"
+]
 ReminderOperation = Literal[
     "created", "updated", "delivered", "failed", "dismissed", "cancelled", "deleted"
 ]
@@ -222,7 +224,8 @@ class SQLiteReminderService:
             connection.execute("BEGIN IMMEDIATE")
             rows = connection.execute(
                 f"SELECT {_REMINDER_COLUMNS} FROM reminders "
-                "WHERE delivery_state = 'scheduled' AND due_timestamp <= ? "
+                "WHERE delivery_state IN ('scheduled', 'delivering') "
+                "AND due_timestamp <= ? "
                 "ORDER BY due_timestamp ASC, created_at ASC, id ASC",
                 (now,),
             ).fetchall()
@@ -230,17 +233,32 @@ class SQLiteReminderService:
             connection.executemany(
                 """
                 UPDATE reminders
-                SET delivery_state = 'delivered', delivery_attempted_at = ?,
-                    delivered_at = ?, updated_at = ?, delivery_error = NULL
-                WHERE id = ? AND delivery_state = 'scheduled'
+                SET delivery_state = 'delivering', delivery_attempted_at = ?,
+                    delivered_at = NULL, updated_at = ?, delivery_error = NULL
+                WHERE id = ? AND delivery_state IN ('scheduled', 'delivering')
                 """,
-                ((now, now, now, reminder_id) for reminder_id in reminder_ids),
+                ((now, now, reminder_id) for reminder_id in reminder_ids),
             )
         claimed = tuple(self.get(reminder_id) for reminder_id in reminder_ids)
-        delivered = tuple(item for item in claimed if item is not None)
-        for reminder in delivered:
-            self._emit("delivered", reminder, now)
-        return delivered
+        return tuple(item for item in claimed if item is not None)
+
+    def record_delivery_success(
+        self, reminder_id: str, *, occurred_at: float
+    ) -> Reminder | None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE reminders
+                SET delivery_state = 'delivered', delivered_at = ?,
+                    updated_at = ?, delivery_error = NULL
+                WHERE id = ? AND delivery_state = 'delivering'
+                """,
+                (occurred_at, occurred_at, reminder_id),
+            )
+        reminder = self.get(reminder_id)
+        if reminder is not None:
+            self._emit("delivered", reminder, occurred_at)
+        return reminder
 
     def record_delivery_failure(
         self, reminder_id: str, error: Exception, *, occurred_at: float
@@ -251,7 +269,7 @@ class SQLiteReminderService:
                 UPDATE reminders
                 SET delivery_state = 'failed', delivered_at = NULL,
                     updated_at = ?, delivery_error = ?
-                WHERE id = ? AND delivery_state = 'delivered'
+                WHERE id = ? AND delivery_state = 'delivering'
                 """,
                 (occurred_at, type(error).__name__, reminder_id),
             )
@@ -313,7 +331,8 @@ class SQLiteReminderService:
                     id TEXT PRIMARY KEY, message TEXT NOT NULL, due_at TEXT NOT NULL,
                     due_timestamp REAL NOT NULL,
                     delivery_state TEXT NOT NULL CHECK (delivery_state IN (
-                        'scheduled', 'delivered', 'failed', 'dismissed', 'cancelled'
+                        'scheduled', 'delivering', 'delivered', 'failed',
+                        'dismissed', 'cancelled'
                     )),
                     task_id TEXT,
                     conversation_id TEXT NOT NULL, created_at REAL NOT NULL,
@@ -366,6 +385,10 @@ class ReminderScheduler:
             except Exception as error:
                 self._service.record_delivery_failure(
                     reminder.id, error, occurred_at=occurred_at
+                )
+            else:
+                self._service.record_delivery_success(
+                    reminder.id, occurred_at=occurred_at
                 )
         return reminders
 

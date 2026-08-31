@@ -88,3 +88,36 @@ def test_scheduler_delivers_each_due_reminder_once_across_restart(
     assert stored.delivery_attempted_at == 1_788_200_100.0
     assert stored.delivered_at == 1_788_200_100.0
     assert stored.delivery_error is None
+
+
+def test_scheduler_recovers_a_claim_interrupted_before_delivery(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "mellowday.sqlite3"
+    interrupted = SQLiteReminderService(
+        database_path,
+        clock=lambda: 1_788_200_000.0,
+        id_factory=lambda: "reminder-1",
+    )
+    interrupted.create(
+        message="Join the call",
+        due_at="2026-08-31T10:00:00+00:00",
+    )
+    claimed = interrupted.claim_due(1_788_200_100.0)
+    assert claimed[0].delivery_state == "delivering"
+
+    deliveries: list[ReminderDelivery] = []
+
+    async def deliver(delivery: ReminderDelivery) -> None:
+        deliveries.append(delivery)
+
+    restarted_service = SQLiteReminderService(database_path)
+    restarted = ReminderScheduler(
+        restarted_service, deliver, clock=lambda: 1_788_200_200.0
+    )
+    asyncio.run(restarted.run_due())
+
+    assert [delivery.reminder_id for delivery in deliveries] == ["reminder-1"]
+    stored = restarted_service.get("reminder-1")
+    assert stored is not None and stored.delivery_state == "delivered"
+    assert stored.delivered_at == 1_788_200_200.0
