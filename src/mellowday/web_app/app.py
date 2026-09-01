@@ -52,6 +52,10 @@ from mellowday.personal_assistant import (
     NoteUpdates,
     NoteValidationError,
     Persona,
+    ProactiveChatAudit,
+    ProactiveChatCoordinator,
+    ProactiveChatDelivery,
+    ProactiveChatValidationError,
     ReminderChange,
     ReminderDelivery,
     ReminderScheduler,
@@ -61,6 +65,7 @@ from mellowday.personal_assistant import (
     SQLiteMemoryService,
     SQLiteNoteService,
     SQLitePersonaStore,
+    SQLiteProactiveChatStore,
     SQLiteReminderService,
     SQLiteTaskService,
     TaskChange,
@@ -201,6 +206,15 @@ class MemoryUpdateBody(BaseModel):
     kind: Literal["preference", "fact", "important"] | None = None
 
 
+class ProactiveChatSettingsBody(BaseModel):
+    enabled: bool
+    quiet_hours_start: str = Field(pattern=r"^\d{2}:\d{2}$")
+    quiet_hours_end: str = Field(pattern=r"^\d{2}:\d{2}$")
+    cooldown_seconds: int = Field(ge=0)
+    daily_limit: int = Field(ge=0)
+    proactive_chat_style: str = Field(min_length=1)
+
+
 def _confirmation_binding(body: ConfirmationBindingBody) -> ConfirmationBinding:
     return ConfirmationBinding(
         user_id=body.user_id,
@@ -241,6 +255,10 @@ def create_app(
     reminder_poll_interval: float = 1.0,
     daily_review_clock: Callable[[], float] = time.time,
     note_clock: Callable[[], float] = time.time,
+    proactive_clock: Callable[[], float] = time.time,
+    proactive_poll_interval: float = 60.0,
+    proactive_minimum_idle_seconds: int = 300,
+    proactive_evaluation_interval_seconds: int = 1800,
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
@@ -256,6 +274,9 @@ def create_app(
         database_path, events=runtime_events
     )
     persona_store = SQLitePersonaStore(database_path)
+    proactive_store = SQLiteProactiveChatStore(
+        database_path, clock=proactive_clock
+    )
     provider_store = SQLiteProviderConfigurationStore(database_path)
     agent_core_reference: list[AgentCore] = []
 
@@ -410,6 +431,15 @@ def create_app(
     live_queues: dict[str, set[asyncio.Queue[dict[str, object]]]] = {}
     live_backlog: dict[str, list[dict[str, object]]] = {}
 
+    def publish_live(
+        conversation_id: str, payload: dict[str, object]
+    ) -> None:
+        backlog = live_backlog.setdefault(conversation_id, [])
+        backlog.append(payload)
+        del backlog[:-100]
+        for queue in tuple(live_queues.get(conversation_id, set())):
+            queue.put_nowait(payload)
+
     async def deliver_reminder(delivery: ReminderDelivery) -> None:
         content = persona_store.get().reminder_chat_content(delivery.message)
         appended = conversation_history.append_once(
@@ -426,11 +456,57 @@ def create_app(
             "due_at": delivery.due_at,
             "occurred_at": time.time(),
         }
-        backlog = live_backlog.setdefault(delivery.conversation_id, [])
-        backlog.append(payload)
-        del backlog[:-100]
-        for queue in tuple(live_queues.get(delivery.conversation_id, set())):
-            queue.put_nowait(payload)
+        publish_live(delivery.conversation_id, payload)
+
+    async def deliver_proactive_chat(delivery: ProactiveChatDelivery) -> None:
+        appended = conversation_history.append_once(
+            delivery.conversation_id,
+            ChatContent(role="assistant", content=delivery.content),
+            deduplication_key=f"proactive-chat:{delivery.evaluation_id}",
+        )
+        if not appended:
+            return
+        publish_live(
+            delivery.conversation_id,
+            {
+                "proactive_chat_id": delivery.evaluation_id,
+                "role": "assistant",
+                "content": delivery.content,
+                "occurred_at": delivery.occurred_at,
+            },
+        )
+
+    def record_proactive_audit(event: ProactiveChatAudit) -> None:
+        agent_core.record_application_action(
+            action=f"proactive_chat_{event.outcome}",
+            resource_type="proactive_chat_evaluation",
+            resource_id=event.evaluation_id,
+            conversation_id=event.conversation_id,
+            metadata={
+                "reason": event.reason,
+                "memory_count": event.memory_count,
+                "life_record_count": event.life_record_count,
+            },
+        )
+
+    proactive_chat = ProactiveChatCoordinator(
+        provider=selected_provider,
+        store=proactive_store,
+        persona_provider=persona_store.get,
+        memory_retriever=MemoryRetriever(memory_service),
+        tasks=task_service,
+        reminders=reminder_service,
+        calendar_events=calendar_event_service,
+        recent_messages=lambda conversation_id: conversation_history.recent(
+            conversation_id, message_limit=6, character_limit=2_000
+        ),
+        deliver=deliver_proactive_chat,
+        audit=record_proactive_audit,
+        installation_timezone=installation_timezone,
+        clock=proactive_clock,
+        minimum_idle_seconds=proactive_minimum_idle_seconds,
+        evaluation_interval_seconds=proactive_evaluation_interval_seconds,
+    )
 
     reminder_scheduler = ReminderScheduler(
         reminder_service, deliver_reminder, clock=reminder_clock
@@ -441,15 +517,31 @@ def create_app(
             await reminder_scheduler.run_due()
             await asyncio.sleep(reminder_poll_interval)
 
+    async def run_proactive_scheduler() -> None:
+        while True:
+            if proactive_store.settings().enabled:
+                try:
+                    await proactive_chat.evaluate("main")
+                except Exception as error:
+                    logging.getLogger("mellowday.web_app").error(
+                        "Proactive Chat evaluation failed: %s",
+                        type(error).__name__,
+                    )
+            await asyncio.sleep(proactive_poll_interval)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         scheduler_task = asyncio.create_task(run_reminder_scheduler())
+        proactive_task = asyncio.create_task(run_proactive_scheduler())
         try:
             yield
         finally:
             scheduler_task.cancel()
+            proactive_task.cancel()
             with suppress(asyncio.CancelledError):
                 await scheduler_task
+            with suppress(asyncio.CancelledError):
+                await proactive_task
 
     app = FastAPI(
         title="Mellowday", docs_url=None, redoc_url=None, lifespan=lifespan
@@ -525,6 +617,20 @@ def create_app(
             status_code=422,
             content={
                 "detail": {"code": "invalid_memory", "message": str(error)}
+            },
+        )
+
+    @app.exception_handler(ProactiveChatValidationError)
+    async def proactive_chat_validation_error(
+        _request: Request, error: ProactiveChatValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "code": "invalid_proactive_chat_settings",
+                    "message": str(error),
+                }
             },
         )
 
@@ -641,6 +747,9 @@ def create_app(
 
     @app.post("/api/chat")
     async def chat(body: ChatRequestBody) -> dict[str, object]:
+        proactive_store.record_user_interaction(
+            body.conversation_id, proactive_clock()
+        )
         result = await agent_core.run_turn(
             TurnRequest(
                 conversation_id=body.conversation_id,
@@ -776,7 +885,15 @@ def create_app(
                     except TimeoutError:
                         yield ": keepalive\n\n"
                         continue
-                    yield f"event: reminder\ndata: {json.dumps(payload)}\n\n"
+                    event_name = (
+                        "proactive_chat"
+                        if "proactive_chat_id" in payload
+                        else "reminder"
+                    )
+                    yield (
+                        f"event: {event_name}\n"
+                        f"data: {json.dumps(payload)}\n\n"
+                    )
             finally:
                 subscribers.discard(queue)
                 if not subscribers:
@@ -871,6 +988,50 @@ def create_app(
     async def update_persona(body: PersonaBody) -> dict[str, object]:
         persona = persona_store.update(Persona(**body.model_dump()))
         return {"persona": asdict(persona)}
+
+    @app.get("/api/settings/proactive-chat")
+    async def get_proactive_chat_settings() -> dict[str, object]:
+        return {
+            "settings": {
+                **asdict(proactive_store.settings()),
+                "proactive_chat_style": persona_store.get().proactive_chat_style,
+            }
+        }
+
+    @app.put("/api/settings/proactive-chat")
+    async def update_proactive_chat_settings(
+        body: ProactiveChatSettingsBody,
+    ) -> dict[str, object]:
+        values = body.model_dump()
+        style = str(values.pop("proactive_chat_style")).strip()
+        if not style:
+            raise ProactiveChatValidationError(
+                "proactive_chat_style must not be empty"
+            )
+        settings = proactive_store.update_settings(**values)
+        current = persona_store.get()
+        persona_store.update(
+            Persona(
+                name=current.name,
+                identity=current.identity,
+                character=current.character,
+                speaking_style=current.speaking_style,
+                relationship_framing=current.relationship_framing,
+                conversational_boundaries=current.conversational_boundaries,
+                proactive_chat_style=style,
+            )
+        )
+        agent_core.record_application_action(
+            action="updated",
+            resource_type="proactive_chat_settings",
+            resource_id="installation",
+        )
+        return {
+            "settings": {
+                **asdict(settings),
+                "proactive_chat_style": style,
+            }
+        }
 
     @app.get("/api/settings/memories")
     async def list_memories(

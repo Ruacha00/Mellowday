@@ -145,6 +145,7 @@ class AgentCore:
         resource_type: str,
         resource_id: str,
         conversation_id: str | None = None,
+        metadata: dict[str, object] | None = None,
     ) -> RuntimeEvent:
         """Record an application-owned action without importing its domain model."""
 
@@ -154,6 +155,7 @@ class AgentCore:
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
+            **(metadata or {}),
         )
 
     def request_application_confirmation(
