@@ -4,7 +4,7 @@
 
 Mellowday（悠日）是一位本地优先、自行部署的个人日常助手。她既陪你聊天，也帮你照看生活里的任务、提醒、日程、笔记和那些值得记住的小事。
 
-当前仓库包含可独立运行的浏览器 Conversation Surface：Web App 后端调用公共 Agent Core facade，并由确定性的 Fake Provider 返回 Assistant Chat Content。Conversation History 使用本地、版本化的 SQLite 持久化；刷新页面或重启后端后仍可恢复，并可在同一界面的 Settings 中查看或重置。产品边界和关键决策见 [Mellowday Product Direction](docs/product-direction.md)。
+仓库包含可独立安装和运行的完整产品：浏览器 Conversation Surface 与集成的 Settings、可替换的模型 Provider、本地持久化的 Persona、Memory、Conversation History 和 Life Records、Daily Review，以及受限且只读的 Proactive Chat。Web App 通过公共 Agent Core facade 驱动对话和扩展能力；管理界面、诊断与审计保持中性、精确。产品边界和关键决策见 [Mellowday Product Direction](docs/product-direction.md)。
 
 ## Prerequisites
 
@@ -25,21 +25,20 @@ python -m playwright install chromium
 python -m pip install -r requirements.txt
 ```
 
-## Development
+## Local run
 
-一个命令同时启动后端健康检查和浏览器 Conversation Surface：
+初始化本地数据并启动 Conversation Surface、Settings、后台调度器和健康检查：
 
 ```bash
-python -m mellowday.web_app
+python -m mellowday migrate
+python -m mellowday serve
 ```
 
 Set `MELLOWDAY_TIMEZONE` to the installation's IANA timezone (for example,
 `Asia/Shanghai`) before starting the app. If it is unset, Mellowday uses `TZ`
 and then falls back to `UTC`.
 
-打开 <http://127.0.0.1:8000/>；健康检查位于 <http://127.0.0.1:8000/healthz>。默认 Conversation History 数据库位于 `data/mellowday.sqlite3`，首次启动时会自动初始化。当前切片刻意使用 Fake Provider，不需要模型凭据或网络访问。
-
-应用组合可通过 `create_app` 的 `conversation_database_path`、`history_message_limit` 和 `history_character_limit` 参数调整本地数据位置，以及传给 Agent Core 的最近历史消息数和字符预算。
+打开 <http://127.0.0.1:8000/>；健康检查位于 <http://127.0.0.1:8000/healthz>。默认情况下，所有应用数据保存在当前操作系统的用户数据目录中；可用 `MELLOWDAY_DATA_DIR` 指定位置。Provider 在 Settings 中配置并保存在本地；未配置 Provider 时，Settings、本地管理和健康检查仍然可用，对话会明确报告缺少配置。
 
 ## Self-hosted release
 
