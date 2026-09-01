@@ -30,9 +30,12 @@ def build_reminder_tools(service: SQLiteReminderService) -> tuple[Tool, ...]:
 
     async def update(arguments: dict[str, object], _conversation_id: str) -> object:
         updates: ReminderUpdates = {}
-        for field in ("message", "due_at", "task_id"):
-            if field in arguments:
-                updates[field] = arguments[field]  # type: ignore[literal-required]
+        if "message" in arguments:
+            updates["message"] = cast(str, arguments["message"])
+        if "due_at" in arguments:
+            updates["due_at"] = cast(str, arguments["due_at"])
+        if "task_id" in arguments:
+            updates["task_id"] = cast(str | None, arguments["task_id"])
         return _reminder_result(
             service.update(cast(str, arguments["reminder_id"]), **updates)
         )

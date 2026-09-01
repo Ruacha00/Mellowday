@@ -41,6 +41,14 @@ and then falls back to `UTC`.
 
 应用组合可通过 `create_app` 的 `conversation_database_path`、`history_message_limit` 和 `history_character_limit` 参数调整本地数据位置，以及传给 Agent Core 的最近历史消息数和字符预算。
 
+## Self-hosted release
+
+Production installation, configuration, migration, startup, backup, restore,
+testing, and upgrade procedures are documented in
+[Self-hosting Mellowday](docs/self-hosting.md). The intentionally preserved
+Tool, Skill, and Provider contracts are documented in
+[Agent Core extension interfaces](docs/extensions.md).
+
 ## Test and build
 
 ```bash

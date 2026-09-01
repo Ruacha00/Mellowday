@@ -1,6 +1,12 @@
 # Read-only reference project; never track or upload.
 /chatbot/
 
+# Local installation configuration and User-owned data.
+/.env
+/.env.*
+/data/
+/backups/
+
 __pycache__/
 *.py[cod]
 *.egg-info/
