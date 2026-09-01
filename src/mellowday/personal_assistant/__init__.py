@@ -35,6 +35,15 @@ from .daily_review import (
 )
 from .daily_review_tools import build_daily_review_tools
 from .persona import Persona, SQLitePersonaStore
+from .proactive_chat import (
+    ProactiveChatAudit,
+    ProactiveChatCoordinator,
+    ProactiveChatDelivery,
+    ProactiveChatResult,
+    ProactiveChatSettings,
+    ProactiveChatValidationError,
+    SQLiteProactiveChatStore,
+)
 from .note_tools import build_note_tools
 from .notes import (
     Note,
@@ -94,6 +103,12 @@ __all__ = [
     "MemoryUpdates",
     "MemoryValidationError",
     "Persona",
+    "ProactiveChatAudit",
+    "ProactiveChatCoordinator",
+    "ProactiveChatDelivery",
+    "ProactiveChatResult",
+    "ProactiveChatSettings",
+    "ProactiveChatValidationError",
     "Note",
     "NoteChange",
     "NoteChangeNotificationError",
@@ -110,6 +125,7 @@ __all__ = [
     "ReminderUpdates",
     "ReminderValidationError",
     "SQLitePersonaStore",
+    "SQLiteProactiveChatStore",
     "SQLiteCalendarEventService",
     "SQLiteMemoryService",
     "SQLiteNoteService",

@@ -12,6 +12,7 @@ const dailyReviewMetadata = document.querySelector("#daily-review-metadata");
 const dailyReviewSections = document.querySelector("#daily-review-sections");
 const refreshDailyReview = document.querySelector("#refresh-daily-review");
 const personaForm = document.querySelector("#persona-form");
+const proactiveChatForm = document.querySelector("#proactive-chat-form");
 const providerForm = document.querySelector("#provider-form");
 const providerList = document.querySelector("#provider-list");
 const cancelProviderEdit = document.querySelector("#cancel-provider-edit");
@@ -69,6 +70,7 @@ const cancelCalendarEventEdit = document.querySelector("#cancel-calendar-event-e
 const activeConversationId = "main";
 const liveStartedAt = Date.now() / 1000;
 const deliveredReminderIds = new Set();
+const deliveredProactiveChatIds = new Set();
 window.setTimeout(() => {
   const liveConversation = new EventSource(
     `/api/conversations/${encodeURIComponent(activeConversationId)}/live?after=${liveStartedAt}`,
@@ -79,6 +81,13 @@ window.setTimeout(() => {
     deliveredReminderIds.add(delivery.reminder_id);
     appendMessage(delivery.role, delivery.content);
     status.textContent = "Reminder delivered.";
+  });
+  liveConversation.addEventListener("proactive_chat", (event) => {
+    const delivery = JSON.parse(event.data);
+    if (deliveredProactiveChatIds.has(delivery.proactive_chat_id)) return;
+    deliveredProactiveChatIds.add(delivery.proactive_chat_id);
+    appendMessage(delivery.role, delivery.content);
+    status.textContent = "Proactive message received.";
   });
 }, 750);
 let selectedConversationId = null;
@@ -597,6 +606,21 @@ async function loadPersona() {
   const { persona } = await response.json();
   for (const [name, value] of Object.entries(persona)) {
     personaForm.elements.namedItem(name).value = value;
+  }
+}
+
+async function loadProactiveChatSettings() {
+  const response = await fetch("/api/settings/proactive-chat");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const { settings } = await response.json();
+  proactiveChatForm.elements.namedItem("enabled").checked = settings.enabled;
+  for (const name of [
+    "quiet_hours_start",
+    "quiet_hours_end",
+    "cooldown_seconds",
+    "daily_limit",
+  ]) {
+    proactiveChatForm.elements.namedItem(name).value = settings[name];
   }
 }
 
@@ -1438,6 +1462,34 @@ personaForm.addEventListener("submit", async (event) => {
   }
 });
 
+proactiveChatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = proactiveChatForm.querySelector('button[type="submit"]');
+  const body = Object.fromEntries(new FormData(proactiveChatForm).entries());
+  body.enabled = proactiveChatForm.elements.namedItem("enabled").checked;
+  body.cooldown_seconds = Number(body.cooldown_seconds);
+  body.daily_limit = Number(body.daily_limit);
+  body.proactive_chat_style = personaForm.elements.namedItem(
+    "proactive_chat_style",
+  ).value;
+  button.disabled = true;
+  settingsStatus.textContent = "Saving Proactive Chat settings.";
+  try {
+    const response = await fetch("/api/settings/proactive-chat", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+    await Promise.all([loadProactiveChatSettings(), loadPersona()]);
+    settingsStatus.textContent = "Proactive Chat settings saved.";
+  } catch (error) {
+    settingsStatus.textContent = "Proactive Chat settings could not be saved.";
+  } finally {
+    button.disabled = false;
+  }
+});
+
 function renderConfirmations(confirmations) {
   confirmationList.replaceChildren();
   confirmationCount.textContent = String(confirmations.length);
@@ -1778,6 +1830,7 @@ async function loadSettings() {
   try {
     await Promise.all([
       loadPersona(),
+      loadProactiveChatSettings(),
       loadDailyReview(),
       loadMemories(),
       loadTasks(),

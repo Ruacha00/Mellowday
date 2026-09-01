@@ -434,6 +434,44 @@
           <div id="provider-list" class="provider-list"></div>
         </section>
 
+        <section class="persona-settings" aria-labelledby="proactive-chat-settings-title">
+          <header class="history-settings-heading">
+            <div>
+              <p class="operation-kicker">Bounded companion messages</p>
+              <h3 id="proactive-chat-settings-title">Proactive Chat</h3>
+              <p class="capability-description">
+                Configure when the Assistant may evaluate one read-only check-in.
+                Evaluation cannot change Memory or Life Records.
+              </p>
+            </div>
+            <span class="local-badge">Local schedule</span>
+          </header>
+
+          <form id="proactive-chat-form" class="persona-form">
+            <label class="provider-state">
+              <span>Enabled</span>
+              <input name="enabled" type="checkbox" />
+            </label>
+            <label>
+              <span>Quiet hours start</span>
+              <input name="quiet_hours_start" type="time" required />
+            </label>
+            <label>
+              <span>Quiet hours end</span>
+              <input name="quiet_hours_end" type="time" required />
+            </label>
+            <label>
+              <span>Cooldown (seconds)</span>
+              <input name="cooldown_seconds" type="number" min="0" required />
+            </label>
+            <label>
+              <span>Daily limit</span>
+              <input name="daily_limit" type="number" min="0" required />
+            </label>
+            <button type="submit">Save Proactive Chat</button>
+          </form>
+        </section>
+
         <section class="persona-settings" aria-labelledby="persona-settings-title">
           <header class="history-settings-heading">
             <div>
