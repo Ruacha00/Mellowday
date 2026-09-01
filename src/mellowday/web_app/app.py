@@ -42,6 +42,7 @@ from mellowday.personal_assistant import (
     CalendarEventChange,
     CalendarEventUpdates,
     CalendarEventValidationError,
+    DailyReviewService,
     MemoryChange,
     MemoryRetriever,
     MemoryUpdates,
@@ -66,10 +67,12 @@ from mellowday.personal_assistant import (
     TaskUpdates,
     TaskValidationError,
     build_calendar_event_tools,
+    build_daily_review_tools,
     build_memory_tools,
     build_note_tools,
     build_reminder_tools,
     build_task_tools,
+    daily_review_payload,
 )
 
 from .provider_settings import (
@@ -236,6 +239,8 @@ def create_app(
     installation_timezone: str = "UTC",
     reminder_clock: Callable[[], float] = time.time,
     reminder_poll_interval: float = 1.0,
+    daily_review_clock: Callable[[], float] = time.time,
+    life_record_clock: Callable[[], float] = time.time,
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
@@ -277,7 +282,9 @@ def create_app(
         )
 
     task_service = SQLiteTaskService(
-        database_path, change_listener=record_task_change
+        database_path,
+        clock=life_record_clock,
+        change_listener=record_task_change,
     )
 
     def record_note_change(change: NoteChange) -> None:
@@ -289,7 +296,9 @@ def create_app(
         )
 
     note_service = SQLiteNoteService(
-        database_path, change_listener=record_note_change
+        database_path,
+        clock=life_record_clock,
+        change_listener=record_note_change,
     )
 
     def record_reminder_change(change: ReminderChange) -> None:
@@ -317,7 +326,16 @@ def create_app(
     calendar_event_service = SQLiteCalendarEventService(
         database_path,
         installation_timezone=installation_timezone,
+        clock=life_record_clock,
         change_listener=record_calendar_event_change,
+    )
+    daily_review_service = DailyReviewService(
+        tasks=task_service,
+        reminders=reminder_service,
+        calendar_events=calendar_event_service,
+        notes=note_service,
+        installation_timezone=installation_timezone,
+        clock=daily_review_clock,
     )
 
     def record_memory_change(change: MemoryChange) -> None:
@@ -350,6 +368,7 @@ def create_app(
         *build_note_tools(note_service),
         *build_reminder_tools(reminder_service),
         *build_calendar_event_tools(calendar_event_service),
+        *build_daily_review_tools(daily_review_service),
         *tuple(tools),
     )
     provider_health: dict[str, dict[str, object]] = {}
@@ -935,6 +954,12 @@ def create_app(
     @app.get("/api/settings/tasks")
     async def list_tasks() -> dict[str, object]:
         return {"tasks": [asdict(task) for task in task_service.list()]}
+
+    @app.get("/api/settings/daily-review")
+    async def get_daily_review() -> dict[str, object]:
+        return {
+            "daily_review": daily_review_payload(daily_review_service.get())
+        }
 
     @app.post("/api/settings/tasks", status_code=201)
     async def create_task(body: TaskCreateBody) -> dict[str, object]:
