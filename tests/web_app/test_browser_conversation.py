@@ -362,6 +362,58 @@ def test_user_can_manage_and_search_notes_from_settings(tmp_path: Path) -> None:
         browser.close()
 
 
+def test_user_can_open_and_refresh_the_daily_review_from_settings(
+    tmp_path: Path,
+) -> None:
+    generated_at = datetime(2026, 9, 1, 1, tzinfo=timezone.utc).timestamp()
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        installation_timezone="Asia/Shanghai",
+        daily_review_clock=lambda: generated_at,
+        note_clock=lambda: generated_at,
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url:
+        with Client(base_url=base_url) as client:
+            client.post(
+                "/api/settings/tasks",
+                json={"title": "Submit report", "deadline": "2026-09-01"},
+            )
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(base_url)
+            page.get_by_role("button", name="Settings").click()
+
+            review = page.locator("#daily-review")
+            expect(
+                review.get_by_role("heading", name="Daily Review")
+            ).to_be_visible()
+            expect(review.locator("#daily-review-metadata")).to_contain_text(
+                "2026-09-01 · Asia/Shanghai"
+            )
+            expect(
+                review.get_by_text("Task · Submit report", exact=True)
+            ).to_be_visible()
+            expect(review.get_by_text("Due today", exact=True)).to_be_visible()
+            expect(review.get_by_text("No Reminders", exact=True)).to_be_visible()
+
+            with Client(base_url=base_url) as client:
+                client.post(
+                    "/api/settings/tasks",
+                    json={"title": "Renew passport", "deadline": "2026-08-30"},
+                )
+            page.get_by_role("button", name="Refresh review").click()
+            expect(
+                review.get_by_text("Task · Renew passport", exact=True)
+            ).to_be_visible()
+            expect(review.get_by_text("Overdue", exact=True)).to_be_visible()
+            browser.close()
+
+
 def test_user_can_search_correct_and_forget_memory_from_settings(
     tmp_path: Path,
 ) -> None:

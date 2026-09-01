@@ -8,6 +8,9 @@ const settingsPanel = document.querySelector("#settings-panel");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsClose = document.querySelector("#settings-close");
 const settingsStatus = document.querySelector("#settings-status");
+const dailyReviewMetadata = document.querySelector("#daily-review-metadata");
+const dailyReviewSections = document.querySelector("#daily-review-sections");
+const refreshDailyReview = document.querySelector("#refresh-daily-review");
 const personaForm = document.querySelector("#persona-form");
 const providerForm = document.querySelector("#provider-form");
 const providerList = document.querySelector("#provider-list");
@@ -373,6 +376,81 @@ function addText(parent, className, content) {
   parent.append(element);
   return element;
 }
+
+function reviewTimingLabel(timing) {
+  return {
+    overdue: "Overdue",
+    due_today: "Due today",
+    upcoming: "Upcoming",
+    unscheduled: "Unscheduled",
+    past: "Past",
+    ongoing: "Ongoing",
+  }[timing] || timing;
+}
+
+function renderDailyReview(review) {
+  dailyReviewMetadata.textContent = `${review.date} · ${review.timezone}`;
+  dailyReviewSections.replaceChildren();
+  const sections = [
+    ["Tasks", "Task", review.tasks, (item) => item.title, (item) => `Deadline · ${item.deadline || "None"}`],
+    ["Reminders", "Reminder", review.reminders, (item) => item.message, (item) => `Due · ${item.due_at}`],
+    ["Calendar Events", "Calendar Event", review.calendar_events, (item) => item.title, (item) => `Starts · ${item.start_at}`],
+    ["Notes updated today", "Note", review.notes, (item) => item.title || "Untitled", (item) => `Updated today · ${item.content}`],
+  ];
+  for (const [label, itemKind, items, titleFor, detailFor] of sections) {
+    const section = document.createElement("section");
+    section.className = "daily-review-section";
+    const heading = document.createElement("h4");
+    heading.textContent = label;
+    section.append(heading);
+    if (items.length === 0) {
+      section.append(makeEmptyState(`No ${label}`));
+      dailyReviewSections.append(section);
+      continue;
+    }
+    const list = document.createElement("div");
+    list.className = "daily-review-list";
+    for (const item of items) {
+      const card = document.createElement("article");
+      card.className = "capability-card daily-review-card";
+      const title = document.createElement("strong");
+      title.textContent = `${itemKind} · ${titleFor(item)}`;
+      const detail = document.createElement("p");
+      detail.className = "capability-description";
+      detail.textContent = detailFor(item);
+      card.append(title);
+      if (item.timing) {
+        const timing = document.createElement("span");
+        timing.className = "skill-state";
+        timing.textContent = reviewTimingLabel(item.timing);
+        card.append(timing);
+      }
+      card.append(detail);
+      list.append(card);
+    }
+    section.append(list);
+    dailyReviewSections.append(section);
+  }
+}
+
+async function loadDailyReview() {
+  const response = await fetch("/api/settings/daily-review");
+  if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+  const payload = await response.json();
+  renderDailyReview(payload.daily_review);
+}
+
+refreshDailyReview.addEventListener("click", async () => {
+  refreshDailyReview.disabled = true;
+  try {
+    await loadDailyReview();
+    settingsStatus.textContent = "Daily Review refreshed.";
+  } catch (error) {
+    settingsStatus.textContent = "Daily Review is unavailable.";
+  } finally {
+    refreshDailyReview.disabled = false;
+  }
+});
 
 function actionButton(label, accessibleLabel, handler) {
   const button = document.createElement("button");
@@ -1700,6 +1778,7 @@ async function loadSettings() {
   try {
     await Promise.all([
       loadPersona(),
+      loadDailyReview(),
       loadMemories(),
       loadTasks(),
       loadNotes(),
