@@ -371,7 +371,7 @@ def test_user_can_open_and_refresh_the_daily_review_from_settings(
         conversation_database_path=tmp_path / "mellowday.sqlite3",
         installation_timezone="Asia/Shanghai",
         daily_review_clock=lambda: generated_at,
-        life_record_clock=lambda: generated_at,
+        note_clock=lambda: generated_at,
         audit_path=None,
     )
 

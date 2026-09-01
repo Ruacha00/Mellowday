@@ -395,7 +395,7 @@ function renderDailyReview(review) {
     ["Tasks", "Task", review.tasks, (item) => item.title, (item) => `Deadline · ${item.deadline || "None"}`],
     ["Reminders", "Reminder", review.reminders, (item) => item.message, (item) => `Due · ${item.due_at}`],
     ["Calendar Events", "Calendar Event", review.calendar_events, (item) => item.title, (item) => `Starts · ${item.start_at}`],
-    ["Notes", "Note", review.notes, (item) => item.title || "Untitled", (item) => `Content · ${item.content}`],
+    ["Notes updated today", "Note", review.notes, (item) => item.title || "Untitled", (item) => `Updated today · ${item.content}`],
   ];
   for (const [label, itemKind, items, titleFor, detailFor] of sections) {
     const section = document.createElement("section");

@@ -18,13 +18,37 @@ class FakeProvider:
         return ProviderReply(content=request.messages[-1].content)
 
 
+def _database_snapshot(path: Path) -> tuple[object, ...]:
+    with sqlite3.connect(path) as connection:
+        schema = tuple(
+            connection.execute(
+                "SELECT name, sql FROM sqlite_master "
+                "WHERE type = 'table' ORDER BY name"
+            )
+        )
+        rows = []
+        for name, _definition in schema:
+            escaped_name = str(name).replace('"', '""')
+            rows.append(
+                (
+                    name,
+                    tuple(
+                        connection.execute(
+                            f'SELECT * FROM "{escaped_name}"'
+                        )
+                    ),
+                )
+            )
+    return schema, tuple(rows)
+
+
 def test_settings_returns_an_empty_derived_daily_review_without_persisting_it(
     tmp_path: Path,
 ) -> None:
     generated_at = datetime(2026, 9, 1, 1, tzinfo=timezone.utc).timestamp()
     database_path = tmp_path / "mellowday.sqlite3"
 
-    async def exercise_boundary() -> dict[str, object]:
+    async def exercise_boundary() -> tuple[dict[str, object], tuple[object, ...]]:
         app = create_app(
             provider=FakeProvider(),
             conversation_database_path=database_path,
@@ -32,14 +56,17 @@ def test_settings_returns_an_empty_derived_daily_review_without_persisting_it(
             daily_review_clock=lambda: generated_at,
             audit_path=None,
         )
+        before = _database_snapshot(database_path)
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.get("/api/settings/daily-review")
         assert response.status_code == 200
-        return response.json()
+        assert _database_snapshot(database_path) == before
+        return response.json(), before
 
-    assert asyncio.run(exercise_boundary()) == {
+    payload, database_snapshot = asyncio.run(exercise_boundary())
+    assert payload == {
         "daily_review": {
             "date": "2026-09-01",
             "timezone": "Asia/Shanghai",
@@ -51,14 +78,7 @@ def test_settings_returns_an_empty_derived_daily_review_without_persisting_it(
         }
     }
 
-    with sqlite3.connect(database_path) as connection:
-        tables = {
-            str(row[0])
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
-        }
-    assert not any("review" in table for table in tables)
+    assert database_snapshot
 
 
 def test_settings_derives_each_daily_review_section_from_current_life_records(
@@ -72,7 +92,7 @@ def test_settings_derives_each_daily_review_section_from_current_life_records(
             conversation_database_path=tmp_path / "mellowday.sqlite3",
             installation_timezone="Asia/Shanghai",
             daily_review_clock=lambda: generated_at,
-            life_record_clock=lambda: generated_at,
+            note_clock=lambda: generated_at,
             reminder_clock=lambda: generated_at,
             audit_path=None,
         )
@@ -147,7 +167,7 @@ def test_settings_derives_each_daily_review_section_from_current_life_records(
                     "end_at": "2026-09-01T00:00",
                 },
             )
-            await client.post(
+            lunch = await client.post(
                 "/api/settings/calendar-events",
                 json={"title": "Lunch", "start_at": "2026-09-01T12:00"},
             )
@@ -175,6 +195,11 @@ def test_settings_derives_each_daily_review_section_from_current_life_records(
                 f"/api/settings/notes/{note.json()['note']['id']}",
                 json={"content": "Bring the final figures"},
             )
+            await client.patch(
+                "/api/settings/calendar-events/"
+                f"{lunch.json()['calendar_event']['id']}",
+                json={"start_at": "2026-09-02T12:00"},
+            )
             refreshed = (await client.get("/api/settings/daily-review")).json()[
                 "daily_review"
             ]
@@ -201,6 +226,7 @@ def test_settings_derives_each_daily_review_section_from_current_life_records(
         assert [(item["title"], item["content"]) for item in first["notes"]] == [
             ("Meeting prep", "Bring the figures")
         ]
+        assert first["notes"][0]["relevance"] == "updated_today"
         assert {item["title"] for item in refreshed["tasks"]} == {
             "Buy tea",
             "Plan the weekend",
@@ -210,6 +236,9 @@ def test_settings_derives_each_daily_review_section_from_current_life_records(
             "Join stand-up"
         ]
         assert refreshed["notes"][0]["content"] == "Bring the final figures"
+        assert [item["title"] for item in refreshed["calendar_events"]] == [
+            "Overnight maintenance"
+        ]
 
     asyncio.run(exercise_boundary())
 
@@ -246,7 +275,7 @@ def test_chat_and_settings_share_the_review_while_persona_stays_chat_only(
             conversation_database_path=tmp_path / "mellowday.sqlite3",
             installation_timezone="Asia/Shanghai",
             daily_review_clock=lambda: generated_at,
-            life_record_clock=lambda: generated_at,
+            note_clock=lambda: generated_at,
             audit_path=None,
         )
         async with AsyncClient(

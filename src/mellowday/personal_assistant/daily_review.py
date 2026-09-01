@@ -50,6 +50,7 @@ class DailyReviewNote:
     title: str | None
     content: str
     updated_at: float
+    relevance: Literal["updated_today"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +150,7 @@ class DailyReviewService:
                 title=note.title,
                 content=note.content,
                 updated_at=note.updated_at,
+                relevance="updated_today",
             )
             for note in self._notes.list()
             if datetime.fromtimestamp(note.updated_at, timezone.utc)

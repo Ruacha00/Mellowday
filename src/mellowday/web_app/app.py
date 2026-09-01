@@ -240,7 +240,7 @@ def create_app(
     reminder_clock: Callable[[], float] = time.time,
     reminder_poll_interval: float = 1.0,
     daily_review_clock: Callable[[], float] = time.time,
-    life_record_clock: Callable[[], float] = time.time,
+    note_clock: Callable[[], float] = time.time,
 ) -> FastAPI:
     """Create the complete Web App boundary with an injectable Provider."""
 
@@ -283,7 +283,6 @@ def create_app(
 
     task_service = SQLiteTaskService(
         database_path,
-        clock=life_record_clock,
         change_listener=record_task_change,
     )
 
@@ -297,7 +296,7 @@ def create_app(
 
     note_service = SQLiteNoteService(
         database_path,
-        clock=life_record_clock,
+        clock=note_clock,
         change_listener=record_note_change,
     )
 
@@ -326,7 +325,6 @@ def create_app(
     calendar_event_service = SQLiteCalendarEventService(
         database_path,
         installation_timezone=installation_timezone,
-        clock=life_record_clock,
         change_listener=record_calendar_event_change,
     )
     daily_review_service = DailyReviewService(
