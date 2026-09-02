@@ -78,17 +78,298 @@ def test_react_replacement_renders_from_the_python_static_host(
         page.goto(f"{base_url}/replacement")
 
         expect(
-            page.get_by_role("heading", name="Mellowday React migration")
+            page.get_by_role("heading", name="我在这里，陪你梳理今天。")
         ).to_be_visible()
         expect(
             page.get_by_text("已加载存储会话。", exact=True)
         ).to_be_visible()
+        expect(page.get_by_role("navigation", name="产品区域")).to_be_visible()
+        assert console_errors == []
+        browser.close()
+
+
+def test_replacement_app_shell_routes_follow_browser_history(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 780})
+        page.goto(f"{base_url}/replacement#/settings")
+
+        expect(page).to_have_url(f"{base_url}/replacement#/settings/appearance")
+        expect(page.get_by_role("heading", name="外观")).to_be_visible()
+        expect(page.get_by_role("link", name="设置", exact=True)).to_have_attribute(
+            "aria-current", "page"
+        )
         expect(
-            page.get_by_text(
-                "Vite runtime assets are available through the Python static host."
+            page.get_by_role("link", name="人格设定", exact=True)
+        ).to_be_visible()
+
+        page.get_by_role("link", name="生活", exact=True).click()
+        expect(page).to_have_url(f"{base_url}/replacement#/life/tasks")
+        expect(page.get_by_role("heading", name="任务")).to_be_visible()
+
+        page.get_by_role("link", name="记忆", exact=True).click()
+        expect(page).to_have_url(f"{base_url}/replacement#/memory")
+        expect(page.get_by_role("heading", name="记忆管理")).to_be_visible()
+
+        page.go_back()
+        expect(page).to_have_url(f"{base_url}/replacement#/life/tasks")
+        page.go_forward()
+        expect(page).to_have_url(f"{base_url}/replacement#/memory")
+
+        page.goto(f"{base_url}/replacement#/unknown")
+        expect(page).to_have_url(f"{base_url}/replacement#/conversation")
+        browser.close()
+
+
+def test_narrow_recent_conversation_drawer_contains_and_restores_focus(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        with Client(base_url=base_url) as client:
+            stored = client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "Drawer fixture"},
+            )
+        assert stored.status_code == 200
+
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 880, "height": 780})
+        page.goto(f"{base_url}/replacement")
+
+        trigger = page.get_by_role("button", name="最近对话")
+        trigger.click()
+        drawer = page.get_by_role("dialog", name="最近对话")
+        expect(drawer).to_be_visible()
+        expect(drawer).to_have_attribute("aria-modal", "true")
+        assert page.locator("[data-shell-content]").evaluate(
+            "element => element.inert"
+        )
+
+        page.keyboard.press("Tab")
+        assert drawer.evaluate("element => element.contains(document.activeElement)")
+        page.keyboard.press("Shift+Tab")
+        assert drawer.evaluate("element => element.contains(document.activeElement)")
+
+        page.keyboard.press("Escape")
+        expect(drawer).not_to_be_visible()
+        expect(trigger).to_be_focused()
+
+        trigger.click()
+        page.get_by_role("button", name="关闭最近对话").click()
+        expect(trigger).to_be_focused()
+        browser.close()
+
+
+def test_replacement_window_controls_require_desktop_capability(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        browser_page = browser.new_page()
+        browser_page.goto(f"{base_url}/replacement")
+        expect(
+            browser_page.get_by_role("button", name="最小化窗口")
+        ).to_have_count(0)
+
+        desktop_page = browser.new_page()
+        desktop_page.add_init_script(
+            """
+            window.__desktopAction = "";
+            window.mellowdayDesktop = {
+              windowControls: {
+                minimize: () => { window.__desktopAction = "minimize"; },
+                toggleMaximize: () => { window.__desktopAction = "maximize"; },
+                close: () => { window.__desktopAction = "close"; },
+              },
+            };
+            """
+        )
+        desktop_page.goto(f"{base_url}/replacement")
+        minimize = desktop_page.get_by_role("button", name="最小化窗口")
+        expect(desktop_page.locator(".title-bar")).to_have_css(
+            "-webkit-app-region", "drag"
+        )
+        expect(minimize).to_have_css("-webkit-app-region", "no-drag")
+        minimize.click()
+        assert desktop_page.evaluate("window.__desktopAction") == "minimize"
+        expect(
+            desktop_page.get_by_role("button", name="切换最大化窗口")
+        ).to_be_visible()
+        expect(desktop_page.get_by_role("button", name="关闭窗口")).to_be_visible()
+        browser.close()
+
+
+def test_replacement_app_shell_restores_wide_navigation_without_overflow(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 780})
+        page.goto(f"{base_url}/replacement")
+        navigation = page.get_by_role("navigation", name="产品区域")
+        workspace = page.locator(".conversation-workspace")
+
+        assert round(navigation.bounding_box()["width"]) == 244
+        assert round(workspace.bounding_box()["width"]) == 820
+        page.get_by_role("button", name="收起导航").click()
+        expect(page.locator(".app-frame")).to_have_attribute(
+            "data-wide-navigation", "dock"
+        )
+        page.wait_for_timeout(250)
+        assert round(navigation.bounding_box()["width"]) == 82
+        assert round(workspace.bounding_box()["width"]) == 820
+
+        page.set_viewport_size({"width": 880, "height": 780})
+        page.wait_for_timeout(250)
+        expect(page.locator(".primary-link")).to_have_count(5)
+        for link in page.locator(".primary-link").all():
+            expect(link).to_be_visible()
+        expect(page.get_by_role("button", name="展开导航")).not_to_be_visible()
+        assert round(navigation.bounding_box()["height"]) == 58
+        assert round(workspace.bounding_box()["width"]) == 856
+
+        page.set_viewport_size({"width": 881, "height": 780})
+        page.wait_for_timeout(250)
+        assert round(navigation.bounding_box()["width"]) == 82
+        assert round(workspace.bounding_box()["width"]) == 577
+        page.get_by_role("button", name="展开导航").click()
+        page.wait_for_timeout(250)
+        assert round(workspace.bounding_box()["width"]) == 577
+        page.get_by_role("button", name="收起导航").click()
+
+        page.set_viewport_size({"width": 521, "height": 860})
+        assert round(workspace.bounding_box()["width"]) == 497
+        page.set_viewport_size({"width": 520, "height": 640})
+        assert round(workspace.bounding_box()["width"]) == 496
+
+        for width, height in (
+            (1200, 780),
+            (881, 780),
+            (880, 780),
+            (521, 860),
+            (520, 640),
+        ):
+            page.set_viewport_size({"width": width, "height": height})
+            page.wait_for_timeout(50)
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= "
+                "document.documentElement.clientWidth"
+            ), f"horizontal overflow at {width}x{height}"
+
+        page.set_viewport_size({"width": 1200, "height": 780})
+        page.reload()
+        page.wait_for_timeout(250)
+        assert round(navigation.bounding_box()["width"]) == 82
+        browser.close()
+
+
+def test_replacement_conversation_workspace_keeps_composer_near_window_bottom(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 780})
+        page.goto(f"{base_url}/replacement")
+
+        for width, height in ((1200, 780), (520, 640)):
+            page.set_viewport_size({"width": width, "height": height})
+            composer = page.get_by_label("消息编辑器占位").bounding_box()
+            assert composer is not None
+            assert composer["y"] + composer["height"] >= height - 100
+
+        browser.close()
+
+
+def test_wide_dock_keeps_recent_conversations_reachable(tmp_path: Path) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 780})
+        page.goto(f"{base_url}/replacement")
+        page.get_by_role("button", name="收起导航").click()
+
+        trigger = page.get_by_role("button", name="最近对话")
+        expect(trigger).to_be_visible()
+        trigger.click()
+        expect(page.get_by_role("dialog", name="最近对话")).to_be_visible()
+        page.keyboard.press("Escape")
+        expect(trigger).to_be_focused()
+        browser.close()
+
+
+def test_selecting_a_recent_conversation_returns_to_the_conversation_surface(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        with Client(base_url=base_url) as client:
+            first = client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "First fixture"},
+            )
+            second = client.post(
+                "/api/chat",
+                json={
+                    "conversation_id": "project-internal-id",
+                    "content": "Second conversation fixture",
+                },
+            )
+        assert first.status_code == 200
+        assert second.status_code == 200
+
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 780})
+        page.goto(f"{base_url}/replacement#/today")
+        page.locator(".recent-rail .recent-list button").first.click()
+
+        expect(page).to_have_url(f"{base_url}/replacement#/conversation")
+        expect(
+            page.get_by_label("会话记录").get_by_text(
+                "Second conversation fixture", exact=True
             )
         ).to_be_visible()
-        assert console_errors == []
         browser.close()
 
 

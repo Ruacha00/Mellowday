@@ -1,14 +1,14 @@
 {
   "index.html": {
-    "file": "assets/index-D3hi1t_W.js",
+    "file": "assets/index-Ctp9lj2u.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "dynamicImports": [
-      "src/MigrationDetails.tsx"
+      "src/appShell/ManagementDetails.tsx"
     ],
     "css": [
-      "assets/index-jFoO8Zlo.css"
+      "assets/index-CD-NoB2H.css"
     ],
     "assets": [
       "assets/fonts/inter-latin-400-normal-C38fXH4l.woff2",
@@ -23,10 +23,10 @@
     "file": "assets/fonts/inter-latin-400-normal-C38fXH4l.woff2",
     "src": "node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2"
   },
-  "src/MigrationDetails.tsx": {
-    "file": "assets/chunks/MigrationDetails-DhDAbE4z.js",
-    "name": "MigrationDetails",
-    "src": "src/MigrationDetails.tsx",
+  "src/appShell/ManagementDetails.tsx": {
+    "file": "assets/chunks/ManagementDetails-aPiOVXFE.js",
+    "name": "ManagementDetails",
+    "src": "src/appShell/ManagementDetails.tsx",
     "isDynamicEntry": true,
     "imports": [
       "index.html"
