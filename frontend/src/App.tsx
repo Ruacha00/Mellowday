@@ -18,6 +18,7 @@ import {
   toggleWideNavigation,
   type WideNavigation,
 } from "./appShell/wideNavigationState";
+import { AppearanceProvider, ThemeDecoration } from "./appearance/Appearance";
 import { ConversationSurface } from "./conversation/ConversationSurface";
 import {
   browserApplicationServices,
@@ -31,7 +32,15 @@ interface AppProps {
   services?: ApplicationServices;
 }
 
-export function App({ services = browserApplicationServices }: AppProps) {
+export function App(props: AppProps) {
+  return (
+    <AppearanceProvider>
+      <ApplicationShell {...props} />
+    </AppearanceProvider>
+  );
+}
+
+function ApplicationShell({ services = browserApplicationServices }: AppProps) {
   const [desktopWindowControls] = useState(() => getDesktopWindowControls());
   const [route, setRoute] = useState<AppRoute>(() =>
     canonicalizeHash(window.location.hash),
@@ -152,6 +161,7 @@ export function App({ services = browserApplicationServices }: AppProps) {
 
   return (
     <div className="app-frame" data-wide-navigation={wideNavigation}>
+      <ThemeDecoration />
       <div className="shell-content" data-shell-content ref={shellContent}>
         <header
           className={desktopWindowControls === null

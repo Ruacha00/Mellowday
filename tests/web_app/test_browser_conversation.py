@@ -129,6 +129,276 @@ def test_replacement_app_shell_routes_follow_browser_history(
         browser.close()
 
 
+def test_replacement_appearance_popover_and_settings_share_persisted_state(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 780})
+        page.goto(f"{base_url}/replacement")
+
+        expect(page.locator("html")).to_have_attribute("data-theme", "sky")
+        trigger = page.get_by_role("button", name="外观，当前主题：晴空")
+        trigger.click()
+        popover = page.get_by_role("dialog", name="外观")
+        expect(popover).to_have_attribute("aria-modal", "false")
+        expect(popover).to_be_visible()
+
+        popover.get_by_role("radio", name="简约").click()
+        popover.get_by_role("slider", name="强调色色相").fill("286")
+        popover.get_by_role("slider", name="背景亮度").fill("91")
+        expect(page.locator("html")).to_have_attribute("data-theme", "minimal")
+        expect(page.locator("[data-theme-decoration]")).to_have_count(0)
+
+        page.keyboard.press("Escape")
+        expect(popover).not_to_be_visible()
+        expect(
+            page.get_by_role("button", name="外观，当前主题：简约")
+        ).to_be_focused()
+        page.get_by_role("link", name="设置", exact=True).click()
+        appearance_page = page.get_by_label("外观设置")
+        expect(appearance_page.get_by_role("radio", name="简约")).to_have_attribute(
+            "aria-checked", "true"
+        )
+        expect(appearance_page.get_by_role("slider", name="强调色色相")).to_have_value("286")
+        expect(appearance_page.get_by_role("slider", name="背景亮度")).to_have_value("91")
+
+        page.reload()
+        appearance_page = page.get_by_label("外观设置")
+        expect(page.locator("html")).to_have_attribute("data-theme", "minimal")
+        expect(appearance_page.get_by_role("slider", name="强调色色相")).to_have_value("286")
+        appearance_page.get_by_role("button", name="重置简约外观").click()
+        expect(page.locator("html")).to_have_attribute("data-theme", "minimal")
+        expect(appearance_page.get_by_role("slider", name="强调色色相")).to_have_value("211")
+        expect(appearance_page.get_by_role("slider", name="背景亮度")).to_have_value("97")
+        browser.close()
+
+
+def test_replacement_appearance_popover_meets_keyboard_and_sizing_contract(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 520, "height": 640})
+        page.goto(f"{base_url}/replacement")
+
+        trigger = page.get_by_role("button", name="外观，当前主题：晴空")
+        trigger.focus()
+        page.keyboard.press("Enter")
+        popover = page.get_by_role("dialog", name="外观")
+        box = popover.bounding_box()
+        assert box is not None
+        assert box["width"] >= 480
+        assert box["x"] >= 17
+        assert box["x"] + box["width"] <= 503
+
+        sky = popover.get_by_role("radio", name="晴空")
+        sakura = popover.get_by_role("radio", name="樱粉")
+        minimal = popover.get_by_role("radio", name="简约")
+        expect(sky).to_have_attribute("tabindex", "0")
+        expect(sakura).to_have_attribute("tabindex", "-1")
+        sky.focus()
+        page.keyboard.press("ArrowRight")
+        expect(sakura).to_be_focused()
+        expect(page.locator("html")).to_have_attribute("data-theme", "sakura")
+        page.keyboard.press("End")
+        expect(minimal).to_be_focused()
+        expect(page.locator("html")).to_have_attribute("data-theme", "minimal")
+        page.keyboard.press("Home")
+        expect(sky).to_be_focused()
+        expect(page.locator("html")).to_have_attribute("data-theme", "sky")
+
+        page.keyboard.press("Escape")
+        expect(popover).not_to_be_visible()
+        expect(trigger).to_be_focused()
+
+        trigger.click()
+        page.mouse.click(4, 300)
+        expect(popover).not_to_be_visible()
+        expect(trigger).to_be_focused()
+
+        trigger.focus()
+        page.keyboard.press("Enter")
+        popover.get_by_role("radio", name="夜色").focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("html")).to_have_attribute("data-theme", "night")
+        browser.close()
+
+
+def test_replacement_requests_only_the_selected_theme_decorations(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for theme in ("sky", "sakura", "mint", "night", "minimal"):
+            context = browser.new_context()
+            context.add_init_script(
+                script=f"""
+                window.localStorage.setItem("mellowday.appearance", JSON.stringify({{
+                  version: 1,
+                  theme: "{theme}",
+                  minimal: {{accentHue: 211, backgroundLightness: 97}},
+                }}));
+                """
+            )
+            page = context.new_page()
+            responses: list[tuple[str, int]] = []
+            page.on(
+                "response",
+                lambda response: responses.append((response.url, response.status))
+                if "/runtime/themes/" in response.url
+                else None,
+            )
+            page.goto(f"{base_url}/replacement")
+            expect(page.locator("html")).to_have_attribute("data-theme", theme)
+            if theme != "minimal":
+                page.wait_for_function(
+                    """() => [...document.querySelectorAll(
+                      '[data-theme-decoration] img'
+                    )].every((image) => image.complete)"""
+                )
+
+            decoration_responses = [
+                (url.rsplit("/", 1)[-1], status) for url, status in responses
+            ]
+            if theme == "minimal":
+                assert decoration_responses == []
+                expect(page.locator("[data-theme-decoration]")).to_have_count(0)
+            else:
+                assert sorted(decoration_responses) == [
+                    (f"{theme}-corner.webp", 200),
+                    (f"{theme}-emblem.webp", 200),
+                    (f"{theme}-motif.svg", 200),
+                ]
+                decoration = page.locator("[data-theme-decoration]")
+                expect(decoration).to_have_count(1)
+                expect(decoration).to_have_attribute("aria-hidden", "true")
+                expect(decoration).to_have_css("pointer-events", "none")
+            context.close()
+        browser.close()
+
+
+def test_replacement_themes_preserve_content_geometry_with_reduced_motion(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        with Client(base_url=base_url) as client:
+            stored = client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "Geometry fixture"},
+            )
+        assert stored.status_code == 200
+
+        browser = playwright.chromium.launch(headless=True)
+        context = browser.new_context(
+            viewport={"width": 1200, "height": 780},
+            reduced_motion="reduce",
+        )
+        page = context.new_page()
+        page.goto(f"{base_url}/replacement")
+        workspace = page.locator(".conversation-workspace")
+        baseline_box = workspace.bounding_box()
+        baseline_type = page.locator(".message p").first.evaluate(
+            """element => {
+              const style = getComputedStyle(element);
+              return [style.fontFamily, style.fontSize, style.lineHeight];
+            }"""
+        )
+        assert baseline_box is not None
+
+        page.get_by_role("button", name="外观，当前主题：晴空").click()
+        popover = page.get_by_role("dialog", name="外观")
+        for theme, label in (
+            ("sky", "晴空"),
+            ("sakura", "樱粉"),
+            ("mint", "薄荷"),
+            ("night", "夜色"),
+            ("minimal", "简约"),
+        ):
+            popover.get_by_role("radio", name=label).click()
+            expect(page.locator("html")).to_have_attribute("data-theme", theme)
+            current_box = workspace.bounding_box()
+            assert current_box is not None
+            for dimension in ("x", "y", "width", "height"):
+                assert abs(current_box[dimension] - baseline_box[dimension]) <= 1
+            assert page.locator(".message p").first.evaluate(
+                """element => {
+                  const style = getComputedStyle(element);
+                  return [style.fontFamily, style.fontSize, style.lineHeight];
+                }"""
+            ) == baseline_type
+            control_contrasts = page.locator(
+                ".appearance-trigger, .theme-option[aria-checked='false']"
+            ).evaluate_all(
+                """elements => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = 1;
+                  canvas.height = 1;
+                  const context = canvas.getContext('2d', {willReadFrequently: true});
+                  if (context === null) return [];
+                  const color = value => {
+                    context.clearRect(0, 0, 1, 1);
+                    context.fillStyle = value;
+                    context.fillRect(0, 0, 1, 1);
+                    return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+                  };
+                  const luminance = channels => channels
+                    .map(channel => channel / 255)
+                    .map(channel => channel <= 0.04045
+                      ? channel / 12.92
+                      : ((channel + 0.055) / 1.055) ** 2.4)
+                    .reduce((sum, channel, index) =>
+                      sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+                  return elements.map(element => {
+                    const style = getComputedStyle(element);
+                    const border = luminance(color(style.borderTopColor));
+                    const background = luminance(color(style.backgroundColor));
+                    return (Math.max(border, background) + 0.05)
+                      / (Math.min(border, background) + 0.05);
+                  });
+                }"""
+            )
+            assert control_contrasts
+            assert min(control_contrasts) >= 3
+            assert page.evaluate(
+                "document.documentElement.scrollWidth <= "
+                "document.documentElement.clientWidth"
+            )
+
+        assert page.evaluate(
+            "matchMedia('(prefers-reduced-motion: reduce)').matches"
+        )
+        assert page.locator(".shell-layout").evaluate(
+            "element => parseFloat(getComputedStyle(element).transitionDuration) <= 0.00001"
+        )
+        context.close()
+        browser.close()
+
+
 def test_narrow_recent_conversation_drawer_contains_and_restores_focus(
     tmp_path: Path,
 ) -> None:

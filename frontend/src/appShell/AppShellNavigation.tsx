@@ -1,5 +1,6 @@
 import { lazy, Suspense, type RefObject } from "react";
 
+import { AppearanceControls, AppearancePopover } from "../appearance/Appearance";
 import type { DesktopWindowControls } from "./desktopCapability";
 import {
   lifeDestinations,
@@ -47,7 +48,6 @@ export function ProductNavigation({
   return (
     <nav aria-label="产品区域" className="product-navigation">
       <div className="rail-identity" aria-hidden={wideNavigation === "dock"}>
-        <span aria-hidden="true" className="rail-emblem">☁</span>
         <strong>Mellowday</strong>
         <span>慢慢过日子，也好好记得你。</span>
       </div>
@@ -86,17 +86,20 @@ export function PageHeading({
         <h1 tabIndex={-1}>{page.title}</h1>
         <p>{page.note}</p>
       </div>
-      {route.area === "conversation" ? (
-        <button
-          aria-haspopup="dialog"
-          className="recent-drawer-trigger"
-          onClick={onOpenRecent}
-          ref={recentTriggerRef}
-          type="button"
-        >
-          最近对话
-        </button>
-      ) : null}
+      <div className="page-actions">
+        {route.area === "conversation" ? (
+          <button
+            aria-haspopup="dialog"
+            className="recent-drawer-trigger"
+            onClick={onOpenRecent}
+            ref={recentTriggerRef}
+            type="button"
+          >
+            最近对话
+          </button>
+        ) : null}
+        <AppearancePopover />
+      </div>
     </header>
   );
 }
@@ -110,6 +113,7 @@ export function ManagementPage({ route }: { route: AppRoute }) {
   const activeDestination = destinations.find(
     (destination) => destination.hash === route.hash,
   );
+  const isAppearancePage = route.hash === "#/settings/appearance";
 
   return (
     <section className="management-page">
@@ -129,12 +133,16 @@ export function ManagementPage({ route }: { route: AppRoute }) {
           ))}
         </nav>
       ) : null}
-      <Suspense fallback={<p className="management-loading">正在载入页面内容…</p>}>
-        <ManagementDetails
-          cards={placeholderCards(route)}
-          description={activeDestination?.description ?? pageDetails(route).description}
-        />
-      </Suspense>
+      {isAppearancePage ? (
+        <AppearanceControls />
+      ) : (
+        <Suspense fallback={<p className="management-loading">正在载入页面内容…</p>}>
+          <ManagementDetails
+            cards={placeholderCards(route)}
+            description={activeDestination?.description ?? pageDetails(route).description}
+          />
+        </Suspense>
+      )}
     </section>
   );
 }
