@@ -41,6 +41,8 @@ export interface ConversationSummary {
   characterCount: number;
   createdAt: number;
   updatedAt: number;
+  title?: string | null;
+  preview?: string | null;
 }
 
 export interface Conversation {
@@ -127,6 +129,8 @@ interface ApiConversationSummary {
   character_count: number;
   created_at: number;
   updated_at: number;
+  title?: string | null;
+  preview?: string | null;
 }
 
 type FetchRequest = (
@@ -174,6 +178,8 @@ function convertConversationSummary(
     characterCount: summary.character_count,
     createdAt: summary.created_at,
     updatedAt: summary.updated_at,
+    title: summary.title ?? null,
+    preview: summary.preview ?? null,
   };
 }
 

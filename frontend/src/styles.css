@@ -390,6 +390,10 @@ a[href] {
   overflow: auto;
 }
 
+.page-surface-conversation {
+  overflow: hidden;
+}
+
 .page-surface::after {
   position: fixed;
   right: -52px;
@@ -425,8 +429,10 @@ a[href] {
 
 .conversation-workspace {
   display: flex;
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .page-heading h1 {
@@ -730,9 +736,14 @@ a[href] {
 }
 
 .transcript {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   margin: 0;
-  padding: 12px 8px 84px;
+  padding: 12px 8px 28px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
   list-style: none;
 }
 
@@ -744,28 +755,149 @@ a[href] {
   border-bottom: 1px solid rgb(164 200 230 / 58%);
 }
 
+.message-meta {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
 .message-meta strong {
   color: var(--accent-strong);
   font-family: Georgia, "Songti SC", serif;
   font-size: 12px;
 }
 
-.message p {
+.message-source {
+  width: fit-content;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.message-body {
   min-width: 0;
-  margin: 0;
   color: var(--ink);
   font-family: Georgia, "Songti SC", serif;
   font-size: 15px;
   line-height: 1.85;
   overflow-wrap: anywhere;
+}
+
+.message-body > :first-child {
+  margin-top: 0;
+}
+
+.message-body > :last-child {
+  margin-bottom: 0;
+}
+
+.message-body p {
+  margin: 0 0 10px;
   white-space: pre-wrap;
 }
 
-.message-user p {
+.message-body h3 {
+  margin: 18px 0 7px;
+  color: var(--accent-strong);
+  font-size: 1.04em;
+  line-height: 1.45;
+}
+
+.message-body ul,
+.message-body ol {
+  margin: 7px 0 10px;
+  padding-left: 1.4rem;
+}
+
+.message-body li {
+  margin: 3px 0;
+}
+
+.message-body blockquote {
+  margin: 10px 0;
+  padding-left: 13px;
+  border-left: 2px solid var(--border);
+  color: var(--ink-muted);
+}
+
+.message-body code {
+  padding: 0.12em 0.38em;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.86em;
+}
+
+.message-body pre {
+  max-width: 100%;
+  margin: 11px 0;
+  padding: 13px 15px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-strong) 74%, transparent);
+  tab-size: 2;
+  white-space: pre;
+}
+
+.message-body pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.message-body a {
+  color: var(--accent-strong);
+  text-underline-offset: 0.2em;
+}
+
+.message-user .message-body {
   padding: 8px 12px;
   border-left: 2px solid var(--border);
   border-radius: 0 8px 8px 0;
   background: color-mix(in srgb, var(--surface-strong) 38%, transparent);
+}
+
+.conversation-event-card {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  margin: 10px 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
+}
+
+.conversation-event-card[data-state="failure"] {
+  border-color: color-mix(in srgb, #b3424e 55%, var(--border));
+}
+
+.event-card-label {
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.event-card-content > strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.event-card-content .message-body {
+  color: var(--ink-muted);
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .empty-transcript {
@@ -1205,12 +1337,17 @@ a[href] {
     font-size: 14px;
   }
 
-  .message {
+  .message,
+  .conversation-event-card {
     display: block;
   }
 
   .message-meta {
     margin-bottom: 6px;
+  }
+
+  .event-card-label {
+    margin-bottom: 5px;
   }
 
   .secondary-navigation a {

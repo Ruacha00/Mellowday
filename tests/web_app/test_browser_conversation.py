@@ -632,7 +632,12 @@ def test_selecting_a_recent_conversation_returns_to_the_conversation_surface(
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1200, "height": 780})
         page.goto(f"{base_url}/replacement#/today")
-        page.locator(".recent-rail .recent-list button").first.click()
+        recent = page.locator(".recent-rail .recent-list button")
+        expect(recent.first).to_contain_text("Second conversation fixture")
+        assert all(
+            "project-internal-id" not in item for item in recent.all_inner_texts()
+        )
+        recent.first.click()
 
         expect(page).to_have_url(f"{base_url}/replacement#/conversation")
         expect(

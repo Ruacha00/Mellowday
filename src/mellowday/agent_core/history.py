@@ -25,6 +25,7 @@ class ConversationSummary:
     character_count: int
     created_at: float
     updated_at: float
+    preview: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,7 +378,16 @@ class SQLiteConversationHistory:
                 COALESCE(SUM(LENGTH(conversation_messages.content)), 0)
                     AS character_count,
                 conversations.created_at,
-                conversations.updated_at
+                conversations.updated_at,
+                (
+                    SELECT preview_message.content
+                    FROM conversation_messages AS preview_message
+                    WHERE preview_message.conversation_id =
+                        conversations.conversation_id
+                      AND TRIM(preview_message.content) <> ''
+                    ORDER BY preview_message.message_id ASC
+                    LIMIT 1
+                ) AS preview
             FROM conversations
             LEFT JOIN conversation_messages USING (conversation_id)
             WHERE (? IS NULL OR conversations.conversation_id = ?)
@@ -396,6 +406,7 @@ class SQLiteConversationHistory:
             character_count=int(row["character_count"]),
             created_at=float(row["created_at"]),
             updated_at=float(row["updated_at"]),
+            preview=None if row["preview"] is None else str(row["preview"]),
         )
 
 

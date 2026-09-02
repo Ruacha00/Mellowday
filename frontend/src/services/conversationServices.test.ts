@@ -69,6 +69,36 @@ describe("conversation response conversion", () => {
       confirmation: pendingConfirmation,
     });
   });
+
+  it("converts recent-conversation presentation fields", async () => {
+    const service = new HttpConversationService(async () =>
+      Response.json({
+        conversations: [
+          {
+            conversation_id: "planning",
+            message_count: 4,
+            character_count: 72,
+            created_at: 100,
+            updated_at: 200,
+            title: "Launch notes",
+            preview: "First stored message",
+          },
+        ],
+      }),
+    );
+
+    await expect(service.listConversations()).resolves.toEqual([
+      {
+        conversationId: "planning",
+        messageCount: 4,
+        characterCount: 72,
+        createdAt: 100,
+        updatedAt: 200,
+        title: "Launch notes",
+        preview: "First stored message",
+      },
+    ]);
+  });
 });
 
 describe("confirmation requests", () => {

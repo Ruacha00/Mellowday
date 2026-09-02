@@ -70,6 +70,10 @@ def test_conversation_history_survives_backend_restart_and_is_isolated(
         assert [row["conversation_id"] for row in rows] == ["beta", "alpha"]
         assert [row["message_count"] for row in rows] == [2, 2]
         assert [row["character_count"] for row in rows] == [41, 35]
+        assert [row["preview"] for row in rows] == [
+            "Separate message",
+            "First message",
+        ]
         assert all(row["created_at"] > 0 for row in rows)
         assert all(row["updated_at"] >= row["created_at"] for row in rows)
         assert alpha_history.status_code == 200

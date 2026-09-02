@@ -43,3 +43,22 @@ def test_idempotent_delivery_migrates_existing_history_and_appends_once(
     assert history.get_conversation("main").messages == (message,)
     with sqlite3.connect(database_path) as connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+
+
+def test_conversation_summary_exposes_first_stored_content_for_title_fallback(
+    tmp_path: Path,
+) -> None:
+    history = SQLiteConversationHistory(
+        tmp_path / "mellowday.sqlite3", clock=lambda: 42.0
+    )
+    history.append(
+        "main",
+        (
+            ChatContent(role="user", content="  Plan   the launch\nnext week  "),
+            ChatContent(role="assistant", content="Let's make a checklist."),
+        ),
+    )
+
+    summary = history.list_conversations()[0]
+
+    assert summary.preview == "  Plan   the launch\nnext week  "

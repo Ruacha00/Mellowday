@@ -11,6 +11,10 @@ import {
   RecentConversationDrawer,
   RecentConversationList,
 } from "./appShell/RecentConversationViews";
+import {
+  recentConversationSummaries,
+  recentConversationTitle,
+} from "./appShell/recentConversations";
 import { canonicalizeHash, type AppRoute } from "./appShell/routeState";
 import {
   loadWideNavigation,
@@ -71,9 +75,7 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
     void historyRequest.current
       .run(async (signal) => {
         const summaries = await services.conversation.listConversations(signal);
-        const sortedSummaries = [...summaries]
-          .sort((left, right) => right.updatedAt - left.updatedAt)
-          .slice(0, 20);
+        const sortedSummaries = recentConversationSummaries(summaries);
         const selectedId = sortedSummaries.some(
           (summary) => summary.conversationId === activeConversationId,
         )
@@ -96,7 +98,10 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
           setLoadState("ready");
         }
       })
-      .catch(() => setLoadState("error"));
+      .catch(() => {
+        setConversation(null);
+        setLoadState("error");
+      });
   }, [activeConversationId, services.conversation]);
 
   useEffect(() => {
@@ -214,7 +219,11 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
             <span aria-hidden="true">☰</span>
           </button>
 
-          <main className="page-surface">
+          <main
+            className={`page-surface${
+              route.area === "conversation" ? " page-surface-conversation" : ""
+            }`}
+          >
             <PageHeading
               onOpenRecent={() => setRecentDrawerOpen(true)}
               recentTriggerRef={recentDrawerTrigger}
@@ -222,7 +231,13 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
             />
             {route.area === "conversation" ? (
               <ConversationSurface
-                latestLiveEvent={latestLiveEvent}
+                conversationId={activeConversationId}
+                conversationTitle={conversation === null
+                  ? "今天，慢慢来"
+                  : recentConversationTitle(conversation.summary)}
+                latestLiveEvent={activeConversationId === "main"
+                  ? latestLiveEvent
+                  : null}
                 loadState={loadState}
                 messages={conversation?.messages ?? []}
               />
