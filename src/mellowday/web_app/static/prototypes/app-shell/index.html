@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="sky" data-variant="A">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#eef7ff" />
+    <title>Mellowday AppShell · Throwaway prototype</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <!-- THROWAWAY UI PROTOTYPE: three AppShell variants on this route via ?variant=A|B|C. -->
+    <div id="theme-art-root"></div>
+
+    <div class="prototype-flag" aria-hidden="true">
+      <span>结构验证原型</span>
+      <small>只读数据 · 内存交互</small>
+    </div>
+
+    <div id="app-shell" class="app-shell">
+      <header class="window-bar" aria-label="桌面应用标题栏">
+        <div class="window-brand"><span class="brand-orb" aria-hidden="true"></span>Mellowday</div>
+        <div class="window-state"><i aria-hidden="true"></i>本地运行</div>
+        <div class="window-controls" aria-hidden="true"><span>—</span><span>□</span><span>×</span></div>
+      </header>
+
+      <aside class="primary-rail" aria-label="主导航">
+        <div class="rail-brand">
+          <div id="theme-emblem-slot" class="emblem-slot" aria-hidden="true"></div>
+          <strong>Mellowday</strong>
+          <span>慢慢过日子，也好好记得你。</span>
+        </div>
+
+        <nav class="primary-nav" aria-label="产品区域">
+          <a class="nav-item is-active" href="#/conversation" data-route="conversation" aria-current="page" title="对话">
+            <span class="nav-icon" aria-hidden="true">◯</span><span>对话</span>
+          </a>
+          <a class="nav-item" href="#/today" data-route="today" title="今日">
+            <span class="nav-icon" aria-hidden="true">▦</span><span>今日</span>
+          </a>
+          <a class="nav-item" href="#/life/tasks" data-route="life" title="生活">
+            <span class="nav-icon" aria-hidden="true">♧</span><span>生活</span>
+          </a>
+          <a class="nav-item" href="#/memory" data-route="memory" title="记忆">
+            <span class="nav-icon" aria-hidden="true">◇</span><span>记忆</span>
+          </a>
+          <a class="nav-item" href="#/settings/appearance" data-route="settings" title="设置">
+            <span class="nav-icon" aria-hidden="true">⚙</span><span>设置</span>
+          </a>
+        </nav>
+
+        <section class="recent-panel" aria-labelledby="recent-heading">
+          <div class="recent-heading-row">
+            <p id="recent-heading">最近对话</p>
+            <span id="conversation-count">—</span>
+          </div>
+          <div id="recent-conversations" class="recent-list"></div>
+        </section>
+
+        <button id="rail-collapse" class="rail-collapse" type="button" aria-expanded="true" aria-controls="app-shell" title="收起导航">
+          <span aria-hidden="true">«</span><span>收起导航</span>
+        </button>
+      </aside>
+
+      <main class="conversation-stage" id="main-content">
+        <header class="conversation-header" id="page-header">
+          <div class="conversation-intro">
+            <p id="section-kicker" class="time-greeting">下午好</p>
+            <h1 id="page-title" tabindex="-1">我在这里，陪你梳理今天。</h1>
+            <p id="source-note">正在读取本地会话…</p>
+          </div>
+
+          <div class="header-actions">
+            <button id="conversation-drawer-trigger" class="quiet-button drawer-trigger" type="button" aria-expanded="false">
+              最近对话
+            </button>
+            <div class="theme-control">
+              <button id="theme-trigger" class="theme-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="theme-popover">
+                <span class="palette-icon" aria-hidden="true">◉</span>
+                <span class="theme-trigger-copy"><small>外观</small><strong id="active-theme-name">晴空</strong></span>
+                <span aria-hidden="true">⌄</span>
+              </button>
+
+              <section id="theme-popover" class="theme-popover" role="dialog" aria-modal="false" aria-labelledby="theme-title" hidden>
+                <header>
+                  <div><small>Theme studio</small><h2 id="theme-title">外观</h2></div>
+                  <button id="theme-close" class="icon-button" type="button" aria-label="关闭外观面板">×</button>
+                </header>
+                <p class="theme-section-label">主题预设</p>
+                <div id="theme-options" class="theme-options" role="list"></div>
+                <div id="minimal-controls" class="minimal-controls" hidden>
+                  <label>
+                    <span>强调色</span>
+                    <input id="accent-input" type="color" value="#2f82df" />
+                  </label>
+                  <label>
+                    <span>背景亮度</span>
+                    <input id="brightness-input" type="range" min="88" max="100" value="97" />
+                  </label>
+                  <p>调整只保留在本次预览的内存中。</p>
+                </div>
+                <p id="fixed-theme-note" class="fixed-theme-note">固定主题配色；装饰仅用于氛围，不参与内容与交互。</p>
+              </section>
+            </div>
+          </div>
+        </header>
+
+        <section id="management-page" class="management-page" aria-labelledby="page-title" hidden>
+          <nav id="secondary-nav" class="secondary-nav" aria-label="二级导航" hidden></nav>
+          <div id="management-content" class="management-content"></div>
+        </section>
+
+        <section id="conversation-workspace" class="conversation-workspace" aria-labelledby="transcript-title">
+          <div class="transcript-meta">
+            <div>
+              <p>Conversation</p>
+              <h2 id="transcript-title">今天，慢慢来</h2>
+            </div>
+            <span id="density-badge">真实内容密度</span>
+          </div>
+
+          <ol id="messages" class="messages" aria-busy="true"></ol>
+          <p id="message-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+
+          <form id="composer" class="composer">
+            <label class="sr-only" for="message-input">输入消息</label>
+            <button class="composer-plus" type="button" data-memory-action="附件入口在结构原型中保持只读" aria-label="添加附件">＋</button>
+            <textarea id="message-input" rows="1" placeholder="输入消息…" autocomplete="off"></textarea>
+            <span class="memory-chip">仅本次预览</span>
+            <button class="send-button" type="submit" aria-label="发送到内存会话"><span>发送</span><i aria-hidden="true">↗</i></button>
+          </form>
+          <p id="interaction-status" class="interaction-status" role="status">读取操作使用现有 API；发送与界面操作不会写入数据。</p>
+        </section>
+      </main>
+    </div>
+
+    <div id="conversation-drawer-layer" class="conversation-drawer-layer" hidden>
+      <div class="drawer-backdrop" aria-hidden="true"></div>
+      <section id="conversation-drawer" class="conversation-drawer" role="dialog" aria-modal="true" aria-labelledby="conversation-drawer-title" tabindex="-1">
+        <div class="drawer-heading"><strong id="conversation-drawer-title">最近对话</strong><button id="conversation-drawer-close" class="icon-button" type="button" aria-label="关闭最近对话">×</button></div>
+        <div id="drawer-conversations" class="recent-list"></div>
+      </section>
+    </div>
+
+    <div id="memory-toast" class="memory-toast" role="status" hidden></div>
+
+    <div class="prototype-switcher" aria-label="原型结构切换器">
+      <button id="previous-variant" type="button" aria-label="上一个结构变体">←</button>
+      <div>
+        <small>Prototype · ← →</small>
+        <strong id="variant-label">A · 长期归巢</strong>
+        <span id="prototype-state">晴空 · 读取中</span>
+      </div>
+      <button id="next-variant" type="button" aria-label="下一个结构变体">→</button>
+    </div>
+  </body>
+</html>

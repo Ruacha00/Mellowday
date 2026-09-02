@@ -6,6 +6,7 @@
 /.env.*
 /data/
 /backups/
+.gitnexus
 
 __pycache__/
 *.py[cod]

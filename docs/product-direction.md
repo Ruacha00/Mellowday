@@ -23,11 +23,17 @@ The assistant should feel like a consistent person during conversation. That per
 - Model providers are replaceable. The product must not make one provider part of its domain model.
 - Multi-user, team, tenant, and social permission models are out of scope.
 
+The current delivery target is a personally built and used Windows 11 x64 application, produced locally as both a per-user installer and a portable bundle. Public distribution, code signing, automatic updates, release channels, telemetry, and uploaded crash reporting are not current product goals.
+
+Provider API keys are encrypted by the application before local persistence. The application uses no master password and does not bind encryption to a Windows user or device; the required key material travels with portable data and backups. This prevents direct plaintext inspection of the database or backup, but it is not intended to resist an attacker who has the complete application and its data or who reverse-engineers the application.
+
 ## Interaction surface
 
-The primary interaction surface is the browser. Chat and management belong to one application: settings are reached from the conversation experience rather than through a separate administration product.
+The primary Windows interaction surface is the Desktop Application. It presents the same Conversation Surface and integrated Settings owned by the Web App rather than introducing a second frontend or a separate administration product.
 
-The conversation surface may be installable as a PWA. While open, it receives live messages from the backend; optional browser notification delivery can extend proactive chat beyond an active tab.
+The Desktop Application owns Windows process lifecycle, single-instance behavior, system tray presence, startup registration, desktop notifications, and recovery when its local backend exits unexpectedly. Closing its window hides it to the system tray so Reminder and Proactive Chat schedulers can continue; an explicit exit stops those services.
+
+Browser mode remains supported for development, diagnostics, and self-hosted use. It serves the same Web App and backend capabilities and is not a separate product. UI and UX layout decisions for the desktop presentation are intentionally deferred to an external design supplied by the User.
 
 QQ, OneBot, and other platform-specific chat adapters are not part of the new product direction.
 
@@ -72,11 +78,12 @@ The model only decides whether to send a message and what to say. Proactive-chat
 
 ## Product structure
 
-The new project is divided into three modules:
+The project is divided into four modules:
 
 - **Agent Core** owns the model loop, conversation sessions, tool and Skill interfaces, permission and confirmation mechanics, and runtime events. It contains no personal-assistant or web-specific behaviour.
 - **Personal Assistant** owns the single Persona, Memory, Tasks, Reminders, Calendar Events, Notes, Daily Review, and Proactive Chat. Its concrete capabilities use the interfaces exposed by Agent Core.
-- **Web App** owns the browser conversation surface, integrated Settings, backend transport, notification delivery, and neutral management views.
+- **Web App** owns the shared Conversation Surface, integrated Settings, backend transport, live delivery, and neutral management views. It remains independently runnable in a browser.
+- **Desktop Shell** owns the Electron and TypeScript Windows host, starts and monitors the packaged Python backend, presents the Web App, and integrates the application with Windows lifecycle, tray, startup, and notification facilities. It contains no assistant domain behaviour.
 
 The existing concrete tools and SKILL.md content from the reference project are not migrated. Tool and Skill interfaces remain available so the new application and future projects can supply their own capabilities.
 

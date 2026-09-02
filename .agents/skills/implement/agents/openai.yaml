@@ -1,0 +1,6 @@
+interface:
+  display_name: "Implement"
+  short_description: "Implement one ready GitHub issue with evidence"
+  default_prompt: "Use $implement to implement one assigned GitHub Issue and return a verified handoff to the issue program manager."
+policy:
+  allow_implicit_invocation: true

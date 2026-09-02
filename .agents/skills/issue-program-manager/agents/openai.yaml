@@ -1,0 +1,6 @@
+interface:
+  display_name: "Issue Program Manager"
+  short_description: "Plan and land GitHub issues one PR at a time"
+  default_prompt: "Use $issue-program-manager to refresh the open issue backlog, choose the best implementation order, and land ready issues one pull request at a time."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,5 @@
+# Define the first-version conversation experience
+
+The Conversation Surface shows the 20 most recently active conversations in descending activity order, using an existing title or a deterministic content/date fallback without model-generated titles; the first version supports scrolling but not conversation search, unread badges, proactive-message badges, or filters. Assistant and Proactive Chat content use the restrained reading flow, with a subtle source label for proactive messages; User turns use the prototype's lightweight block treatment, Markdown and code receive content-appropriate formatting, and tool state, confirmations, and failures appear as compact neutral event cards rather than Persona-styled dialogue.
+
+The first-version composer is text-only: Enter sends, Shift+Enter inserts a newline, input-method composition never triggers sending, and the field grows to approximately eight lines. Drafts are retained per conversation only for the current application session and are not promised across an application exit; attachments and a separate emoji panel remain out of scope.

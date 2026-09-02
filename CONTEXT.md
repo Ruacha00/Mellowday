@@ -79,9 +79,25 @@ _Avoid_: Routine acknowledgement
 ## Product surface
 
 **Conversation Surface**:
-The browser experience where the User chats with the Assistant and receives proactive messages.
+The product area where the User chats with the Assistant and receives proactive messages. It can be presented by the Desktop Application or in a browser.
 _Avoid_: Chat client, separate frontend
 
+**Today**:
+The neutral product area that presents the Daily Review as the User's current-day overview.
+_Avoid_: Daily record, settings page
+
+**Life**:
+The neutral product area for viewing and managing Tasks, Reminders, Calendar Events, and Notes. It does not own Memory.
+_Avoid_: Settings, memory manager
+
+**Memory Management**:
+The neutral product area for reviewing and managing Memory independently of Life Records and Settings.
+_Avoid_: Life, settings page, conversation history
+
+**Desktop Application**:
+The installed or portable Windows product entry that presents Mellowday's product areas and keeps local assistant services available while its window is hidden.
+_Avoid_: Desktop wrapper, native rewrite
+
 **Settings**:
-The neutral management area within the Conversation Surface for persona, memory, life records, providers, permissions, and diagnostics. Persona does not apply to Settings.
+The neutral product area for appearance, Persona and Proactive Chat configuration, providers, capabilities, Conversation History, audit information, and diagnostics. It does not own Memory or Life Records, and Persona does not apply to its copy.
 _Avoid_: Separate admin backend, character dialogue
