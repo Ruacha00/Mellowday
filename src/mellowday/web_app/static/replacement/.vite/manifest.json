@@ -1,0 +1,35 @@
+{
+  "index.html": {
+    "file": "assets/index-CUXC69JW.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "dynamicImports": [
+      "src/MigrationDetails.tsx"
+    ],
+    "css": [
+      "assets/index-TpM8FRZ5.css"
+    ],
+    "assets": [
+      "assets/fonts/inter-latin-400-normal-C38fXH4l.woff2",
+      "assets/inter-latin-400-normal-CyCys3Eg.woff"
+    ]
+  },
+  "node_modules/@fontsource/inter/files/inter-latin-400-normal.woff": {
+    "file": "assets/inter-latin-400-normal-CyCys3Eg.woff",
+    "src": "node_modules/@fontsource/inter/files/inter-latin-400-normal.woff"
+  },
+  "node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2": {
+    "file": "assets/fonts/inter-latin-400-normal-C38fXH4l.woff2",
+    "src": "node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2"
+  },
+  "src/MigrationDetails.tsx": {
+    "file": "assets/chunks/MigrationDetails-D-WKPhaz.js",
+    "name": "MigrationDetails",
+    "src": "src/MigrationDetails.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html"
+    ]
+  }
+}

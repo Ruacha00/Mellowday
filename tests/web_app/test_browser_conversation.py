@@ -56,6 +56,40 @@ def running_server(app: FastAPI) -> Iterator[str]:
             raise RuntimeError("test server did not stop")
 
 
+def test_react_replacement_renders_from_the_python_static_host(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        console_errors: list[str] = []
+        page.on(
+            "console",
+            lambda message: console_errors.append(message.text)
+            if message.type == "error"
+            else None,
+        )
+        page.goto(f"{base_url}/replacement")
+        page.wait_for_load_state("networkidle")
+
+        expect(
+            page.get_by_role("heading", name="Mellowday React migration")
+        ).to_be_visible()
+        expect(
+            page.get_by_text(
+                "Vite runtime assets are available through the Python static host."
+            )
+        ).to_be_visible()
+        assert console_errors == []
+        browser.close()
+
+
 def test_user_can_chat_from_the_conversation_surface(tmp_path: Path) -> None:
     app = create_app(
         provider=FakeProvider(),

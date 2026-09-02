@@ -8,6 +8,7 @@ schedulers, and the health endpoint in one process.
 
 - Python 3.12 or newer
 - `pip`
+- Node.js 22.12 or newer and `npm` when building from a checkout
 - A writable local directory for Mellowday data
 - Chromium installed by Playwright only when running the browser test suite
 
@@ -19,11 +20,14 @@ Create and activate a virtual environment, then install the project:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
+npm --prefix frontend ci
+npm --prefix frontend run build
 python -m pip install .
 ```
 
 On POSIX shells, activate with `source .venv/bin/activate`. A release wheel can be
-installed in place of `.` with `python -m pip install mellowday-0.1.0-py3-none-any.whl`.
+installed in place of `.` with `python -m pip install mellowday-0.1.0-py3-none-any.whl`;
+installing a prebuilt wheel does not require Node.js or `npm`.
 
 The installed package and its runtime dependencies are independent of the
 read-only reference project. Do not copy the reference directory into an
@@ -100,7 +104,10 @@ From a clean checkout, install development requirements and the test browser:
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m playwright install chromium
-python -m mypy src
+npm --prefix frontend ci
+npm --prefix frontend run check
+npm --prefix frontend run build
+python -m mypy src build_backend.py
 python -m pytest -q tests/agent_core/test_public_facade.py tests/web_app
 python -m pytest -q
 python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist

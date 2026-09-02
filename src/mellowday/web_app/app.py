@@ -89,6 +89,7 @@ from .operations import install_log_buffer
 
 
 _STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
+_REPLACEMENT_DIRECTORY = _STATIC_DIRECTORY / "replacement"
 _DEFAULT_SKILL_STATE_PATH = Path(".mellowday") / "skill-enablement.json"
 _DEFAULT_AUDIT_PATH = Path(".mellowday") / "audit-events.jsonl"
 
@@ -653,6 +654,10 @@ def create_app(
     @app.get("/", response_class=FileResponse)
     async def conversation_surface() -> FileResponse:
         return FileResponse(_STATIC_DIRECTORY / "index.html")
+
+    @app.get("/replacement", response_class=FileResponse)
+    async def replacement_surface() -> FileResponse:
+        return FileResponse(_REPLACEMENT_DIRECTORY / "index.html")
 
     @app.get("/healthz")
     async def health() -> dict[str, bool]:
