@@ -16,6 +16,18 @@ export function recentConversationSummaries(
     .slice(0, RECENT_CONVERSATION_LIMIT);
 }
 
+export function resolveActiveConversationId(
+  summaries: ConversationSummary[],
+  activeConversationId: string,
+): string {
+  return summaries.some(
+    (summary) => summary.conversationId === activeConversationId,
+  )
+    ? activeConversationId
+    : recentConversationSummaries(summaries)[0]?.conversationId ??
+        activeConversationId;
+}
+
 export function recentConversationTitle(
   summary: ConversationSummary,
 ): string {

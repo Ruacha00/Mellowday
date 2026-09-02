@@ -14,6 +14,7 @@ import {
 import {
   recentConversationSummaries,
   recentConversationTitle,
+  resolveActiveConversationId,
 } from "./appShell/recentConversations";
 import { canonicalizeHash, type AppRoute } from "./appShell/routeState";
 import {
@@ -76,12 +77,11 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
       .run(async (signal) => {
         const summaries = await services.conversation.listConversations(signal);
         const sortedSummaries = recentConversationSummaries(summaries);
-        const selectedId = sortedSummaries.some(
-          (summary) => summary.conversationId === activeConversationId,
-        )
-          ? activeConversationId
-          : sortedSummaries[0]?.conversationId ?? activeConversationId;
-        const selectedConversation = sortedSummaries.length > 0
+        const selectedId = resolveActiveConversationId(
+          summaries,
+          activeConversationId,
+        );
+        const selectedConversation = summaries.length > 0
           ? await services.conversation.loadConversation(selectedId, signal)
           : null;
         return {
@@ -167,6 +167,21 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
   return (
     <div className="app-frame" data-wide-navigation={wideNavigation}>
       <ThemeDecoration />
+      <p
+        aria-atomic="true"
+        aria-live="polite"
+        className="visually-hidden"
+        role="status"
+      >
+        {latestLiveEvent === null
+          ? ""
+          : (
+              <span key={`${latestLiveEvent.kind}:${latestLiveEvent.id}`}>
+                {latestLiveEvent.kind === "reminder" ? "提醒" : "主动聊天"}
+                ：{latestLiveEvent.message.content}
+              </span>
+            )}
+      </p>
       <div className="shell-content" data-shell-content ref={shellContent}>
         <header
           className={desktopWindowControls === null
@@ -235,11 +250,14 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
                 conversationTitle={conversation === null
                   ? "今天，慢慢来"
                   : recentConversationTitle(conversation.summary)}
-                latestLiveEvent={activeConversationId === "main"
-                  ? latestLiveEvent
-                  : null}
+                entries={(conversation?.messages ?? []).map(
+                  (message, index) => ({
+                    id: `stored-${index}`,
+                    kind: "message" as const,
+                    message,
+                  }),
+                )}
                 loadState={loadState}
-                messages={conversation?.messages ?? []}
               />
             ) : (
               <ManagementPage route={route} />

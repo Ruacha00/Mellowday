@@ -683,6 +683,9 @@ def test_react_replacement_loads_history_and_appends_one_live_reminder(
         page.goto(f"{base_url}/replacement")
 
         transcript = page.get_by_label("会话记录")
+        announcer = page.locator('[aria-live="polite"]')
+        expect(announcer).to_have_count(1)
+        expect(announcer).to_have_text("")
         expect(
             transcript.get_by_text("Stored replacement tracer", exact=True)
         ).to_be_visible()
@@ -705,15 +708,19 @@ def test_react_replacement_loads_history_and_appends_one_live_reminder(
         )
         expect(live_message).to_be_visible(timeout=5_000)
         expect(live_message).to_have_count(1)
+        expect(announcer).to_have_text(
+            "提醒：Mellowday reminder: Fixture live event"
+        )
         assert len(live_requests) == 1
 
         page.reload()
         restarted_transcript = page.get_by_label("会话记录")
-        expect(
-            restarted_transcript.get_by_text(
-                "Mellowday reminder: Fixture live event", exact=True
-            )
-        ).to_have_count(1)
+        persisted_reminder = restarted_transcript.locator(
+            ".conversation-event-card",
+            has_text="Mellowday reminder: Fixture live event",
+        )
+        expect(persisted_reminder).to_have_count(1)
+        expect(page.locator('[aria-live="polite"]')).to_have_text("")
         browser.close()
 
 

@@ -1,8 +1,10 @@
 export type ChatRole = "user" | "assistant";
+export type ChatMessageSource = "reminder" | "proactive_chat";
 
 export interface ChatMessage {
   role: ChatRole;
   content: string;
+  source?: ChatMessageSource | null;
 }
 
 export interface RuntimeEvent {
@@ -91,6 +93,7 @@ export interface ConversationService {
 interface ApiChatMessage {
   role: ChatRole;
   content: string;
+  source?: ChatMessageSource | null;
 }
 
 interface ApiRuntimeEvent {

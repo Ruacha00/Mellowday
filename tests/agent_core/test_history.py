@@ -35,14 +35,19 @@ def test_idempotent_delivery_migrates_existing_history_and_appends_once(
     message = ChatContent(role="assistant", content="Mellowday reminder: Call")
 
     assert history.append_once(
-        "main", message, deduplication_key="reminder:one"
+        "main", message, deduplication_key="reminder:one", source="reminder"
     ) is True
     assert history.append_once(
-        "main", message, deduplication_key="reminder:one"
+        "main", message, deduplication_key="reminder:one", source="reminder"
     ) is False
-    assert history.get_conversation("main").messages == (message,)
+    stored = history.get_conversation("main")
+
+    assert stored is not None
+    assert stored.messages[0].role == message.role
+    assert stored.messages[0].content == message.content
+    assert stored.messages[0].source == "reminder"
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_conversation_summary_exposes_first_stored_content_for_title_fallback(

@@ -447,6 +447,7 @@ def create_app(
             delivery.conversation_id,
             ChatContent(role="assistant", content=content),
             deduplication_key=f"reminder:{delivery.reminder_id}",
+            source="reminder",
         )
         if not appended:
             return
@@ -464,6 +465,7 @@ def create_app(
             delivery.conversation_id,
             ChatContent(role="assistant", content=delivery.content),
             deduplication_key=f"proactive-chat:{delivery.evaluation_id}",
+            source="proactive_chat",
         )
         if not appended:
             return
@@ -833,7 +835,14 @@ def create_app(
             raise HTTPException(status_code=404, detail="Conversation not found")
         return {
             "conversation": asdict(conversation.summary),
-            "messages": [asdict(message) for message in conversation.messages],
+            "messages": [
+                {
+                    key: value
+                    for key, value in asdict(message).items()
+                    if value is not None
+                }
+                for message in conversation.messages
+            ],
         }
 
     @app.post("/api/conversations/{conversation_id}/reset")

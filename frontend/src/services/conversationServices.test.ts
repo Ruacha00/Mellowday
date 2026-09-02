@@ -252,7 +252,9 @@ describe("application live-event ownership", () => {
     });
     leaveFirstRoute();
     service.subscribe((event) => {
-      secondRouteEvents.push(event.message.content);
+      secondRouteEvents.push(
+        `${event.message.source}:${event.message.content}`,
+      );
     });
 
     sources[0].emit("reminder", {
@@ -288,8 +290,8 @@ describe("application live-event ownership", () => {
     expect(sources).toHaveLength(1);
     expect(firstRouteEvents).toEqual([]);
     expect(secondRouteEvents).toEqual([
-      "Mellowday reminder: Join the call",
-      "How is your afternoon going?",
+      "reminder:Mellowday reminder: Join the call",
+      "proactive_chat:How is your afternoon going?",
     ]);
   });
 });

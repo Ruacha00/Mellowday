@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { ConversationSurface, MarkdownContent } from "./ConversationSurface";
+import {
+  ConversationSurface,
+  type ConversationEntry,
+} from "./ConversationSurface";
+import { MarkdownContent } from "./MarkdownContent";
 
 describe("conversation content", () => {
   it("renders common Markdown and selectable code as semantic content", () => {
@@ -30,24 +34,59 @@ describe("conversation content", () => {
     expect(markup).toContain("const ready = true;");
   });
 
-  it("labels proactive content without turning history into a live region", () => {
+  it("labels persisted proactive content without turning history into a live region", () => {
     const markup = renderToStaticMarkup(
       <ConversationSurface
         conversationId="main"
         conversationTitle="Afternoon check-in"
-        latestLiveEvent={{
-          kind: "proactive_chat",
-          id: "proactive-1",
-          message: { role: "assistant", content: "Tea break?" },
-          occurredAt: 100,
-        }}
+        entries={[{
+          id: "stored-1",
+          kind: "message",
+          message: {
+            role: "assistant",
+            content: "Tea break?",
+            source: "proactive_chat",
+          },
+        }]}
         loadState="ready"
-        messages={[{ role: "assistant", content: "Tea break?" }]}
       />,
     );
 
     expect(markup).toContain('data-source="proactive_chat"');
     expect(markup).toContain("主动聊天");
     expect(markup).not.toContain("aria-live");
+  });
+
+  it("renders operational entries through the same ordered content seam", () => {
+    const entries: ConversationEntry[] = [
+      {
+        id: "message-1",
+        kind: "message",
+        message: { role: "user", content: "Delete the note" },
+      },
+      {
+        id: "event-1",
+        kind: "event",
+        detail: "The note was left unchanged.",
+        label: "Tool",
+        state: "failure",
+        title: "Delete failed",
+      },
+    ];
+
+    const markup = renderToStaticMarkup(
+      <ConversationSurface
+        conversationId="main"
+        conversationTitle="Tool result"
+        entries={entries}
+        loadState="ready"
+      />,
+    );
+
+    expect(markup.indexOf("Delete the note")).toBeLessThan(
+      markup.indexOf("Delete failed"),
+    );
+    expect(markup).toContain('data-state="failure"');
+    expect(markup).toContain("The note was left unchanged.");
   });
 });

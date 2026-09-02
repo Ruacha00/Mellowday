@@ -88,7 +88,11 @@ export class ApplicationLiveEventService implements LiveEventService {
     this.receiveUnique(this.deliveredReminderIds, {
       kind: "reminder",
       id: delivery.reminder_id,
-      message: { role: delivery.role, content: delivery.content },
+      message: {
+        role: delivery.role,
+        content: delivery.content,
+        source: "reminder",
+      },
       occurredAt: delivery.occurred_at,
     });
   }
@@ -97,7 +101,11 @@ export class ApplicationLiveEventService implements LiveEventService {
     this.receiveUnique(this.deliveredProactiveChatIds, {
       kind: "proactive_chat",
       id: delivery.proactive_chat_id,
-      message: { role: delivery.role, content: delivery.content },
+      message: {
+        role: delivery.role,
+        content: delivery.content,
+        source: "proactive_chat",
+      },
       occurredAt: delivery.occurred_at,
     });
   }

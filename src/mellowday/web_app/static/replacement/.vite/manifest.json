@@ -1,6 +1,6 @@
 {
   "index.html": {
-    "file": "assets/index-DIOaRvxn.js",
+    "file": "assets/index-DlZ35UNG.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -24,7 +24,7 @@
     "src": "node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2"
   },
   "src/appShell/ManagementDetails.tsx": {
-    "file": "assets/chunks/ManagementDetails-DvNe4nlb.js",
+    "file": "assets/chunks/ManagementDetails-T5WZWwyt.js",
     "name": "ManagementDetails",
     "src": "src/appShell/ManagementDetails.tsx",
     "isDynamicEntry": true,

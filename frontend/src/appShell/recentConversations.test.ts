@@ -4,6 +4,7 @@ import type { ConversationSummary } from "../services/conversationApi";
 import {
   recentConversationSummaries,
   recentConversationTitle,
+  resolveActiveConversationId,
 } from "./recentConversations";
 
 function summary(updatedAt: number): ConversationSummary {
@@ -58,6 +59,20 @@ describe("recent conversation ordering", () => {
         { length: 20 },
         (_, index) => `conversation-${23 - index}`,
       ),
+    );
+  });
+
+  it("keeps the selected conversation when it falls outside the recent 20", () => {
+    const summaries = Array.from({ length: 23 }, (_, index) => ({
+      ...summary(index + 1),
+      conversationId: `conversation-${index + 1}`,
+    }));
+
+    expect(resolveActiveConversationId(summaries, "conversation-1")).toBe(
+      "conversation-1",
+    );
+    expect(resolveActiveConversationId(summaries, "missing")).toBe(
+      "conversation-23",
     );
   });
 });
