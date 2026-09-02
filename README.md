@@ -63,7 +63,7 @@ python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
 The Vite build is a required predecessor of Python packaging. The custom
 build backend validates the generated manifest and every referenced frontend
 artifact before creating a wheel. Use `npm --prefix frontend run dev` for the
-frontend development server; the production build is available through the
-temporary `/replacement` entry while `/` continues to serve the legacy Web App.
+frontend development server. The production FastAPI root serves the generated
+React application; the former `/replacement` entry redirects to `/`.
 
 测试覆盖两个已确认的公共边界：Agent Core facade，以及包含 API 和真实浏览器旅程的完整 Web App 边界。隔离构建测试会在不复制 `chatbot/` 参考树的临时项目中生成 wheel，并检查运行时包不包含对该目录的导入。

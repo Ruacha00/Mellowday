@@ -1,10 +1,32 @@
 import { lazy, Suspense, type RefObject } from "react";
 
 import { AppearanceControls, AppearancePopover } from "../appearance/Appearance";
+import { LifeCalendarPage } from "../life/LifeCalendarPage";
+import { LifeNotesPage } from "../life/LifeNotesPage";
 import { LifeRemindersPage } from "../life/LifeRemindersPage";
 import { LifeTasksPage } from "../life/LifeTasksPage";
+import { MemoryManagementPage } from "../memory/MemoryManagementPage";
+import { PersonaSettingsPage } from "../settings/PersonaSettingsPage";
+import { ProactiveChatSettingsPage } from "../settings/ProactiveChatSettingsPage";
+import { ProviderSettingsPage } from "../settings/ProviderSettingsPage";
+import { CapabilitySettingsPage } from "../settings/CapabilitySettingsPage";
+import { ConversationHistoryPage } from "../settings/ConversationHistoryPage";
+import { DiagnosticsPage } from "../settings/DiagnosticsPage";
+import { OperationRecordsPage } from "../settings/OperationRecordsPage";
+import type { AuditService } from "../services/auditApi";
+import type { CalendarEventService } from "../services/calendarEventApi";
+import type { CapabilityService } from "../services/capabilityApi";
+import type { ConversationService } from "../services/conversationApi";
+import type { DailyReviewService } from "../services/dailyReviewApi";
+import type { DiagnosticsService } from "../services/diagnosticsApi";
+import type { MemoryService } from "../services/memoryApi";
+import type { NoteService } from "../services/noteApi";
+import type { PersonaService } from "../services/personaApi";
+import type { ProactiveChatService } from "../services/proactiveChatApi";
+import type { ProviderService } from "../services/providerApi";
 import type { ReminderService } from "../services/reminderApi";
 import type { TaskService } from "../services/taskApi";
+import { TodayPage } from "../today/TodayPage";
 import type { DesktopWindowControls } from "./desktopCapability";
 import {
   lifeDestinations,
@@ -109,10 +131,34 @@ export function PageHeading({
 }
 
 export function ManagementPage({
+  auditService,
+  calendarEventService,
+  capabilityService,
+  conversationService,
+  dailyReviewService,
+  diagnosticsService,
+  memoryService,
+  noteService,
+  onConversationHistoryChange,
+  personaService,
+  proactiveChatService,
+  providerService,
   reminderService,
   route,
   taskService,
 }: {
+  auditService: AuditService;
+  calendarEventService: CalendarEventService;
+  capabilityService: CapabilityService;
+  conversationService: ConversationService;
+  dailyReviewService: DailyReviewService;
+  diagnosticsService: DiagnosticsService;
+  memoryService: MemoryService;
+  noteService: NoteService;
+  onConversationHistoryChange: () => void;
+  personaService: PersonaService;
+  proactiveChatService: ProactiveChatService;
+  providerService: ProviderService;
   reminderService: ReminderService;
   route: AppRoute;
   taskService: TaskService;
@@ -145,10 +191,35 @@ export function ManagementPage({
           ))}
         </nav>
       ) : null}
-      {route.hash === "#/life/tasks" ? (
+      {route.hash === "#/today" ? (
+        <TodayPage reviewService={dailyReviewService} taskService={taskService} />
+      ) : route.hash === "#/life/tasks" ? (
         <LifeTasksPage service={taskService} />
       ) : route.hash === "#/life/reminders" ? (
         <LifeRemindersPage service={reminderService} />
+      ) : route.hash === "#/life/calendar" ? (
+        <LifeCalendarPage service={calendarEventService} />
+      ) : route.hash === "#/life/notes" ? (
+        <LifeNotesPage service={noteService} />
+      ) : route.hash === "#/memory" ? (
+        <MemoryManagementPage service={memoryService} />
+      ) : route.hash === "#/settings/persona" ? (
+        <PersonaSettingsPage service={personaService} />
+      ) : route.hash === "#/settings/proactive-chat" ? (
+        <ProactiveChatSettingsPage service={proactiveChatService} />
+      ) : route.hash === "#/settings/providers" ? (
+        <ProviderSettingsPage service={providerService} />
+      ) : route.hash === "#/settings/capabilities" ? (
+        <CapabilitySettingsPage service={capabilityService} />
+      ) : route.hash === "#/settings/history" ? (
+        <ConversationHistoryPage
+          onHistoryChanged={onConversationHistoryChange}
+          service={conversationService}
+        />
+      ) : route.hash === "#/settings/audit" ? (
+        <OperationRecordsPage service={auditService} />
+      ) : route.hash === "#/settings/diagnostics" ? (
+        <DiagnosticsPage service={diagnosticsService} />
       ) : isAppearancePage ? (
         <AppearanceControls />
       ) : (

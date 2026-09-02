@@ -303,6 +303,18 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
               />
             ) : (
               <ManagementPage
+                auditService={services.audit}
+                calendarEventService={services.calendarEvents}
+                capabilityService={services.capabilities}
+                conversationService={services.conversation}
+                dailyReviewService={services.dailyReview}
+                diagnosticsService={services.diagnostics}
+                memoryService={services.memories}
+                noteService={services.notes}
+                onConversationHistoryChange={() => refreshConversation(false)}
+                personaService={services.persona}
+                proactiveChatService={services.proactiveChat}
+                providerService={services.providers}
                 reminderService={services.reminders}
                 route={route}
                 taskService={services.tasks}

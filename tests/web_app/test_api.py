@@ -222,7 +222,7 @@ def test_settings_resets_only_selected_history_and_reports_structured_events(
         ]
         assert before_reset.json()["events"][0]["details"] == {
             "from_version": 0,
-            "schema_version": 2,
+            "schema_version": 3,
         }
         assert unconfirmed.status_code == 422
         assert cancel_requested.status_code == 200

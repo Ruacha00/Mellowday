@@ -8,7 +8,7 @@ import "./styles.css";
 const root = document.getElementById("root");
 
 if (root === null) {
-  throw new Error("Mellowday replacement root is missing");
+  throw new Error("Mellowday application root is missing");
 }
 
 createRoot(root).render(

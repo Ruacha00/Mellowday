@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal, assert_never, cast
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -655,11 +655,11 @@ def create_app(
 
     @app.get("/", response_class=FileResponse)
     async def conversation_surface() -> FileResponse:
-        return FileResponse(_STATIC_DIRECTORY / "index.html")
-
-    @app.get("/replacement", response_class=FileResponse)
-    async def replacement_surface() -> FileResponse:
         return FileResponse(_REPLACEMENT_DIRECTORY / "index.html")
+
+    @app.get("/replacement", response_class=RedirectResponse)
+    async def replacement_surface() -> RedirectResponse:
+        return RedirectResponse(url="/", status_code=308)
 
     @app.get("/healthz")
     async def health() -> dict[str, bool]:

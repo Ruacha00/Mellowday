@@ -34,6 +34,15 @@ _THEME_ASSET_NAMES = {
     )
 }
 
+_VISUAL_BASELINE_ROOT = Path("docs/visual-baselines/issue-48")
+_VISUAL_BASELINE_NAMES = {
+    "appearance-narrow.png",
+    "minimal-narrow.png",
+    "night-desktop.png",
+    "recent-conversation-drawer.png",
+    "sky-desktop.png",
+}
+
 
 def _copy_distribution_project(destination: Path) -> Path:
     isolated_project = destination / "project"
@@ -86,7 +95,9 @@ def test_distribution_builds_without_the_reference_tree(tmp_path: Path) -> None:
         )
         metadata = archive.read(metadata_name).decode("utf-8")
 
-    assert "mellowday/web_app/static/index.html" in packaged_files
+    assert "mellowday/web_app/static/index.html" not in packaged_files
+    assert "mellowday/web_app/static/app.js" not in packaged_files
+    assert "mellowday/web_app/static/styles.css" not in packaged_files
     replacement_root = "mellowday/web_app/static/replacement/"
     replacement_files = [
         name for name in packaged_files if name.startswith(replacement_root)
@@ -135,6 +146,34 @@ def test_distribution_builds_without_the_reference_tree(tmp_path: Path) -> None:
         "chatbot" not in dependency.casefold()
         for dependency in project["project"]["dependencies"]
     )
+
+
+def test_web_app_frontend_has_no_node_or_electron_runtime_access() -> None:
+    forbidden = (
+        'from "node:',
+        "from 'node:",
+        'from "electron"',
+        "from 'electron'",
+        "ipcrenderer",
+        "window.require",
+    )
+    sources = [
+        path.read_text(encoding="utf-8").casefold()
+        for path in Path("frontend/src").rglob("*")
+        if path.suffix in {".ts", ".tsx"}
+    ]
+    assert all(marker not in source for source in sources for marker in forbidden)
+
+
+def test_production_visual_baseline_set_is_bounded() -> None:
+    baselines = {
+        path.name for path in _VISUAL_BASELINE_ROOT.glob("*.png") if path.is_file()
+    }
+    assert baselines == _VISUAL_BASELINE_NAMES
+    for name in baselines:
+        payload = (_VISUAL_BASELINE_ROOT / name).read_bytes()
+        assert payload.startswith(b"\x89PNG\r\n\x1a\n")
+        assert len(payload) > 10_000
 
 
 def test_distribution_packages_exactly_twelve_production_theme_roles(

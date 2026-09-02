@@ -35,9 +35,6 @@ include-package-data = false
 
 [tool.setuptools.package-data]
 "mellowday.web_app" = [
-    "static/app.js",
-    "static/index.html",
-    "static/styles.css",
     "static/replacement/**/*",
     "static/replacement/.vite/*",
 ]

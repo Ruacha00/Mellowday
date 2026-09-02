@@ -55,7 +55,7 @@ def test_replacement_life_reminders_supports_the_complete_lifecycle(
     with running_server(app) as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 520, "height": 640})
-        page.goto(f"{base_url}/replacement#/life/reminders")
+        page.goto(f"{base_url}/#/life/reminders")
 
         expect(page.get_by_role("navigation", name="生活二级导航")).to_be_visible()
         expect(page.get_by_text("还没有提醒。", exact=True)).to_be_visible()
@@ -170,7 +170,7 @@ def test_replacement_life_reminder_loads_stop_while_live_delivery_continues(
                 route.continue_()
 
         page.route("**/api/settings/reminders", delay_reminder_list)
-        page.goto(f"{base_url}/replacement#/life/reminders")
+        page.goto(f"{base_url}/#/life/reminders")
         expect(page.get_by_text("正在加载提醒…", exact=True)).to_be_visible()
         page.get_by_role("link", name="今日", exact=True).click()
         expect(page.get_by_role("heading", name="今天", exact=True)).to_be_visible()
@@ -197,7 +197,7 @@ def test_replacement_life_reminder_loads_stop_while_live_delivery_continues(
             if request.method == "GET"
             else route.continue_(),
         )
-        page.goto(f"{base_url}/replacement#/life/reminders")
+        page.goto(f"{base_url}/#/life/reminders")
         expect(page.get_by_role("alert")).to_contain_text("提醒加载失败")
         page.unroute("**/api/settings/reminders")
         page.get_by_role("button", name="重试", exact=True).click()
