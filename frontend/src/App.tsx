@@ -24,13 +24,16 @@ import {
   type WideNavigation,
 } from "./appShell/wideNavigationState";
 import { AppearanceProvider, ThemeDecoration } from "./appearance/Appearance";
-import { ConversationSurface } from "./conversation/ConversationSurface";
+import {
+  ConversationSurface,
+  type ConversationEntry,
+} from "./conversation/ConversationSurface";
+import { useConversationSession } from "./conversation/useConversationSession";
 import {
   browserApplicationServices,
   type ApplicationServices,
 } from "./services/applicationServices";
-import type { Conversation, ConversationSummary } from "./services/conversationApi";
-import type { LiveConversationEvent } from "./services/liveEvents";
+import type { Conversation, ConversationSummary, Turn } from "./services/conversationApi";
 import { LatestRequest } from "./services/requestLifecycle";
 
 interface AppProps {
@@ -58,16 +61,21 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
   const [conversationSummaries, setConversationSummaries] = useState<
     ConversationSummary[]
   >([]);
-  const [latestLiveEvent, setLatestLiveEvent] =
-    useState<LiveConversationEvent | null>(null);
+  const [announcement, setAnnouncement] = useState<{
+    id: string;
+    text: string;
+  } | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
     "loading",
   );
   const [recentDrawerOpen, setRecentDrawerOpen] = useState(false);
   const historyRequest = useRef(new LatestRequest());
+  const activeConversationIdRef = useRef(activeConversationId);
+  const announcementSequence = useRef(0);
   const recentDrawerTrigger = useRef<HTMLButtonElement>(null);
   const dockRecentDrawerTrigger = useRef<HTMLButtonElement>(null);
   const shellContent = useRef<HTMLDivElement>(null);
+  activeConversationIdRef.current = activeConversationId;
 
   const refreshConversation = useCallback((showLoadingState: boolean) => {
     if (showLoadingState) {
@@ -124,7 +132,12 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
 
   useEffect(() => {
     const unsubscribe = services.liveEvents.subscribe((event) => {
-      setLatestLiveEvent(event);
+      if (event.kind === "proactive_chat") {
+        setAnnouncement({
+          id: `live-${++announcementSequence.current}`,
+          text: `主动聊天：${event.message.content}`,
+        });
+      }
       refreshConversation(false);
     });
     services.liveEvents.start();
@@ -158,11 +171,45 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
     });
   }, []);
   const selectConversation = useCallback((conversationId: string) => {
+    activeConversationIdRef.current = conversationId;
     setActiveConversationId(conversationId);
     if (window.location.hash !== "#/conversation") {
       window.location.hash = "#/conversation";
     }
   }, []);
+
+  const announceTurn = (turn: Turn) => {
+    if (turn.chatContent.content.length === 0) {
+      return;
+    }
+    setAnnouncement({
+      id: `turn-${++announcementSequence.current}`,
+      text: `Mellowday：${turn.chatContent.content}`,
+    });
+  };
+
+  const conversationSession = useConversationSession({
+    conversationId: activeConversationId,
+    onRefresh: (conversationId) => {
+      if (activeConversationIdRef.current === conversationId) {
+        refreshConversation(false);
+      }
+    },
+    onTurn: announceTurn,
+    service: services.conversation,
+  });
+
+  const storedEntries: ConversationEntry[] = (conversation?.messages ?? []).map(
+    (message, index) => ({
+      id: `stored-${index}`,
+      kind: "message",
+      message,
+    }),
+  );
+  const operationEntry = conversationSession.operation;
+  const conversationEntries = operationEntry === undefined
+    ? storedEntries
+    : [...storedEntries, operationEntry];
 
   return (
     <div className="app-frame" data-wide-navigation={wideNavigation}>
@@ -173,14 +220,9 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
         className="visually-hidden"
         role="status"
       >
-        {latestLiveEvent === null
+        {announcement === null
           ? ""
-          : (
-              <span key={`${latestLiveEvent.kind}:${latestLiveEvent.id}`}>
-                {latestLiveEvent.kind === "reminder" ? "提醒" : "主动聊天"}
-                ：{latestLiveEvent.message.content}
-              </span>
-            )}
+          : <span key={announcement.id}>{announcement.text}</span>}
       </p>
       <div className="shell-content" data-shell-content ref={shellContent}>
         <header
@@ -246,18 +288,18 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
             />
             {route.area === "conversation" ? (
               <ConversationSurface
+                confirmations={conversationSession.confirmations}
                 conversationId={activeConversationId}
                 conversationTitle={conversation === null
                   ? "今天，慢慢来"
                   : recentConversationTitle(conversation.summary)}
-                entries={(conversation?.messages ?? []).map(
-                  (message, index) => ({
-                    id: `stored-${index}`,
-                    kind: "message" as const,
-                    message,
-                  }),
-                )}
+                draft={conversationSession.draft}
+                entries={conversationEntries}
                 loadState={loadState}
+                onConfirmationDecision={conversationSession.decideConfirmation}
+                onDraftChange={conversationSession.setDraft}
+                onSend={conversationSession.send}
+                sending={conversationSession.sending}
               />
             ) : (
               <ManagementPage route={route} />

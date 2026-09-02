@@ -880,6 +880,18 @@ a[href] {
   border-color: color-mix(in srgb, #b3424e 55%, var(--border));
 }
 
+.conversation-event-card[data-state="pending"] {
+  border-color: color-mix(in srgb, var(--accent-strong) 52%, var(--border));
+}
+
+.conversation-event-card[data-state="success"] {
+  border-color: color-mix(in srgb, #2b8669 52%, var(--border));
+}
+
+.conversation-event-card[data-state="cancelled"] {
+  border-color: color-mix(in srgb, var(--ink-muted) 44%, var(--border));
+}
+
 .event-card-label {
   color: var(--ink-muted);
   font-size: 10px;
@@ -907,7 +919,7 @@ a[href] {
   text-align: center;
 }
 
-.composer-preview {
+.composer {
   position: sticky;
   bottom: 0;
   display: grid;
@@ -923,25 +935,82 @@ a[href] {
   backdrop-filter: blur(18px);
 }
 
-.composer-preview > span:first-child {
+.composer-mark {
   color: var(--accent-strong);
   font-size: 25px;
   text-align: center;
 }
 
-.composer-preview > span:nth-child(2) {
-  padding-left: 13px;
+.composer textarea {
+  field-sizing: content;
+  width: 100%;
+  min-height: 42px;
+  max-height: calc(1.65em * 8 + 20px);
+  padding: 10px 13px;
   border-left: 1px solid var(--line);
-  font-size: 12px;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-y: auto;
+  resize: none;
 }
 
-.composer-preview button {
+.composer textarea::placeholder {
+  color: var(--ink-muted);
+}
+
+.composer button {
   padding: 11px 17px;
   border: 0;
   border-radius: 12px;
   color: var(--on-accent);
   background: var(--accent-strong);
-  opacity: 0.68;
+  cursor: pointer;
+}
+
+.composer button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.confirmation-event-card .event-card-content > p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.confirmation-event-card code {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.confirmation-actions button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--accent-strong);
+  background: var(--control);
+  cursor: pointer;
+}
+
+.confirmation-actions .confirmation-accept {
+  border-color: transparent;
+  color: var(--on-accent);
+  background: var(--accent-strong);
 }
 
 .drawer-layer {

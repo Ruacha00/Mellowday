@@ -1,3 +1,4 @@
+import asyncio
 import socket
 import threading
 import time
@@ -694,6 +695,7 @@ def test_react_replacement_loads_history_and_appends_one_live_reminder(
                 "I heard: Stored replacement tracer", exact=True
             )
         ).to_be_visible()
+        page.get_by_role("link", name="今日", exact=True).click()
 
         due_at = datetime.fromtimestamp(now - 1, timezone.utc).isoformat()
         with Client(base_url=base_url) as client:
@@ -703,14 +705,13 @@ def test_react_replacement_loads_history_and_appends_one_live_reminder(
             )
         assert created.status_code == 201
 
+        page.get_by_role("link", name="对话", exact=True).click()
         live_message = transcript.get_by_text(
             "Mellowday reminder: Fixture live event", exact=True
         )
         expect(live_message).to_be_visible(timeout=5_000)
         expect(live_message).to_have_count(1)
-        expect(announcer).to_have_text(
-            "提醒：Mellowday reminder: Fixture live event"
-        )
+        expect(announcer).to_have_text("")
         assert len(live_requests) == 1
 
         page.reload()
@@ -721,6 +722,312 @@ def test_react_replacement_loads_history_and_appends_one_live_reminder(
         )
         expect(persisted_reminder).to_have_count(1)
         expect(page.locator('[aria-live="polite"]')).to_have_text("")
+        browser.close()
+
+
+def test_replacement_proactive_chat_survives_route_changes_once(
+    tmp_path: Path,
+) -> None:
+    class ProactiveProvider:
+        name = "proactive-browser-script"
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            return ProviderReply(
+                content='{"send": true, "content": "A gentle local check-in."}'
+            )
+
+    now = datetime(2026, 9, 2, 8, tzinfo=timezone.utc).timestamp()
+    app = create_app(
+        provider=ProactiveProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+        proactive_clock=lambda: now,
+        proactive_poll_interval=0.01,
+        proactive_minimum_idle_seconds=0,
+        proactive_evaluation_interval_seconds=60,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        live_requests: list[str] = []
+        page.on(
+            "request",
+            lambda request: live_requests.append(request.url)
+            if "/api/conversations/main/live" in request.url
+            else None,
+        )
+        page.goto(f"{base_url}/replacement#/today")
+
+        with Client(base_url=base_url) as client:
+            saved = client.put(
+                "/api/settings/proactive-chat",
+                json={
+                    "enabled": True,
+                    "quiet_hours_start": "00:00",
+                    "quiet_hours_end": "00:00",
+                    "cooldown_seconds": 0,
+                    "daily_limit": 1,
+                    "proactive_chat_style": "gentle and brief",
+                },
+            )
+        assert saved.status_code == 200
+
+        announcer = page.locator('[aria-live="polite"]')
+        expect(announcer).to_have_text(
+            "主动聊天：A gentle local check-in.", timeout=5_000
+        )
+        page.get_by_role("link", name="对话", exact=True).click()
+        proactive_message = page.locator('[data-source="proactive_chat"]').filter(
+            has_text="A gentle local check-in."
+        )
+        expect(proactive_message).to_have_count(1)
+        expect(proactive_message).to_be_visible()
+        assert len(live_requests) == 1
+        browser.close()
+
+
+def test_replacement_composer_keeps_drafts_and_respects_keyboard_input(
+    tmp_path: Path,
+) -> None:
+    class SlowProvider:
+        name = "slow-composer-script"
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            await asyncio.sleep(0.15)
+            return ProviderReply(content="A calm reply.")
+
+    app = create_app(
+        provider=SlowProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        with Client(base_url=base_url) as client:
+            main = client.post(
+                "/api/chat",
+                json={"conversation_id": "main", "content": "Main fixture"},
+            )
+            second = client.post(
+                "/api/chat",
+                json={
+                    "conversation_id": "project-notes",
+                    "content": "Project fixture",
+                },
+            )
+        assert main.status_code == 200
+        assert second.status_code == 200
+
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 881, "height": 780})
+        page.set_default_timeout(5_000)
+        chat_requests: list[dict[str, object]] = []
+        page.on(
+            "request",
+            lambda request: chat_requests.append(
+                {
+                    "method": request.method,
+                    "payload": request.post_data_json,
+                }
+            )
+            if request.url.endswith("/api/chat")
+            else None,
+        )
+        page.goto(f"{base_url}/replacement#/conversation")
+
+        composer = page.get_by_role("textbox", name="消息")
+        recent = page.get_by_role("region", name="最近对话")
+        recent_buttons = recent.get_by_role("button")
+        expect(recent_buttons).to_have_count(2)
+        composer.fill("主会话草稿")
+        recent_buttons.first.click()
+        expect(composer).to_have_value("")
+        composer.fill("项目会话草稿")
+        recent_buttons.nth(1).click()
+        expect(composer).to_have_value("主会话草稿")
+
+        composer.dispatch_event("compositionstart")
+        composer.press("Enter")
+        page.wait_for_timeout(50)
+        assert chat_requests == []
+        composer.dispatch_event("compositionend")
+        composer.fill("主会话草稿")
+
+        composer.press("End")
+        composer.press("Shift+Enter")
+        expect(composer).to_have_value("主会话草稿\n")
+        page.set_viewport_size({"width": 520, "height": 640})
+        single_line_height = composer.bounding_box()["height"]
+        composer.fill("\n".join(f"第 {index} 行" for index in range(1, 11)))
+        grown_height = composer.bounding_box()["height"]
+        assert grown_height > single_line_height
+        assert grown_height < 240
+        expect(page.get_by_role("button", name="发送消息")).to_be_visible()
+
+        composer.fill("通过 Enter 发送")
+        composer.press("Enter")
+        expect(page.get_by_text("正在发送消息", exact=True)).to_be_visible()
+        expect(page.get_by_text("A calm reply.", exact=True).last).to_be_visible()
+        expect(page.get_by_text("消息已发送", exact=True)).to_be_visible()
+        expect(composer).to_have_value("")
+        expect(composer).to_be_focused()
+        expect(page.locator('[aria-live="polite"]')).to_have_text(
+            "Mellowday：A calm reply."
+        )
+        assert chat_requests[-1] == {
+            "method": "POST",
+            "payload": {"conversation_id": "main", "content": "通过 Enter 发送"},
+        }
+
+        page.route(
+            "**/api/chat",
+            lambda route: route.fulfill(
+                status=500,
+                content_type="application/json",
+                body="{}",
+            ),
+        )
+        composer.fill("失败后保留")
+        composer.press("Enter")
+        expect(page.get_by_text("发送失败", exact=True)).to_be_visible()
+        expect(composer).to_have_value("失败后保留")
+        expect(composer).to_be_focused()
+        browser.close()
+
+
+def test_replacement_conversation_completes_two_step_confirmation(
+    tmp_path: Path,
+) -> None:
+    executions: list[dict[str, object]] = []
+
+    class ConfirmationProvider:
+        name = "conversation-confirmation-script"
+
+        def __init__(self) -> None:
+            self.replies = iter(
+                (
+                    ProviderReply(
+                        content="This erases the note permanently. Continue?",
+                        tool_calls=(
+                            ToolCall(
+                                "call-cancel",
+                                "erase_note",
+                                {"note_id": "note-1"},
+                            ),
+                        ),
+                    ),
+                    ProviderReply(content="I left the note unchanged."),
+                    ProviderReply(
+                        content="This erases the note permanently. Continue?",
+                        tool_calls=(
+                            ToolCall(
+                                "call-accept",
+                                "erase_note",
+                                {"note_id": "note-1"},
+                            ),
+                        ),
+                    ),
+                    ProviderReply(content="The note is gone."),
+                    ProviderReply(
+                        content="This erases the note permanently. Continue?",
+                        tool_calls=(
+                            ToolCall(
+                                "call-fail",
+                                "erase_note",
+                                {"note_id": "note-fail"},
+                            ),
+                        ),
+                    ),
+                    ProviderReply(content="The note could not be erased."),
+                )
+            )
+
+        async def complete(self, request: ProviderRequest) -> ProviderReply:
+            return next(self.replies)
+
+    async def erase_note(
+        arguments: dict[str, object], conversation_id: str
+    ) -> dict[str, object]:
+        if arguments["note_id"] == "note-fail":
+            raise RuntimeError("fixture failure")
+        executions.append(arguments)
+        return {"conversation_id": conversation_id}
+
+    app = create_app(
+        provider=ConfirmationProvider(),
+        tools=(
+            Tool(
+                name="erase_note",
+                description="Permanently erase one note.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"note_id": {"type": "string"}},
+                    "required": ["note_id"],
+                },
+                executor=erase_note,
+                side_effect="irreversible",
+                risk="high",
+            ),
+        ),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_default_timeout(5_000)
+        decisions: list[dict[str, object]] = []
+        page.on(
+            "request",
+            lambda request: decisions.append(request.post_data_json)
+            if "/api/settings/confirmations/" in request.url
+            and request.url.endswith("/decision")
+            else None,
+        )
+        page.goto(f"{base_url}/replacement#/conversation")
+        composer = page.get_by_role("textbox", name="消息")
+
+        composer.fill("Erase note one.")
+        composer.press("Enter")
+        confirmation = page.get_by_role("group", name="操作确认").last
+        expect(confirmation.get_by_text("等待你的确认", exact=True)).to_be_visible()
+        page.reload()
+        composer = page.get_by_role("textbox", name="消息")
+        confirmation = page.get_by_role("group", name="操作确认").last
+        expect(confirmation).to_be_visible()
+        confirmation.get_by_role("button", name="取消操作").click()
+        expect(confirmation.get_by_text("已取消操作", exact=True)).to_be_visible()
+        expect(confirmation).to_have_attribute("data-state", "cancelled")
+        expect(confirmation).to_be_focused()
+        expect(page.get_by_text("I left the note unchanged.", exact=True)).to_be_visible()
+        assert executions == []
+
+        composer.fill("Erase note one now.")
+        composer.press("Enter")
+        confirmation = page.get_by_role("group", name="操作确认").last
+        confirmation.get_by_role("button", name="确认执行").click()
+        expect(confirmation.get_by_text("操作已完成", exact=True)).to_be_visible()
+        expect(confirmation).to_have_attribute("data-state", "success")
+        expect(confirmation).to_be_focused()
+        expect(page.get_by_text("The note is gone.", exact=True)).to_be_visible()
+        assert executions == [{"note_id": "note-1"}]
+
+        composer.fill("Erase the failing note.")
+        composer.press("Enter")
+        confirmation = page.get_by_role("group", name="操作确认").last
+        confirmation.get_by_role("button", name="确认执行").click()
+        expect(confirmation.get_by_text("操作执行失败", exact=True)).to_be_visible()
+        expect(confirmation).to_have_attribute("data-state", "failure")
+        expect(confirmation).to_be_focused()
+        expect(confirmation.get_by_role("button")).to_have_count(0)
+        expect(page.get_by_text("The note could not be erased.", exact=True)).to_be_visible()
+        assert [decision["decision"] for decision in decisions] == [
+            "reject",
+            "accept",
+            "accept",
+        ]
         browser.close()
 
 
