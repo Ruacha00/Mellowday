@@ -302,7 +302,11 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
                 sending={conversationSession.sending}
               />
             ) : (
-              <ManagementPage route={route} taskService={services.tasks} />
+              <ManagementPage
+                reminderService={services.reminders}
+                route={route}
+                taskService={services.tasks}
+              />
             )}
           </main>
         </div>

@@ -1,7 +1,9 @@
 import { lazy, Suspense, type RefObject } from "react";
 
 import { AppearanceControls, AppearancePopover } from "../appearance/Appearance";
+import { LifeRemindersPage } from "../life/LifeRemindersPage";
 import { LifeTasksPage } from "../life/LifeTasksPage";
+import type { ReminderService } from "../services/reminderApi";
 import type { TaskService } from "../services/taskApi";
 import type { DesktopWindowControls } from "./desktopCapability";
 import {
@@ -107,9 +109,11 @@ export function PageHeading({
 }
 
 export function ManagementPage({
+  reminderService,
   route,
   taskService,
 }: {
+  reminderService: ReminderService;
   route: AppRoute;
   taskService: TaskService;
 }) {
@@ -143,6 +147,8 @@ export function ManagementPage({
       ) : null}
       {route.hash === "#/life/tasks" ? (
         <LifeTasksPage service={taskService} />
+      ) : route.hash === "#/life/reminders" ? (
+        <LifeRemindersPage service={reminderService} />
       ) : isAppearancePage ? (
         <AppearanceControls />
       ) : (

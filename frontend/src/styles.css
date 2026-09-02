@@ -1160,7 +1160,8 @@ a[href] {
   color: var(--accent-strong);
 }
 
-.tasks-page {
+.tasks-page,
+.reminders-page {
   display: grid;
   grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
   align-items: start;
@@ -1169,7 +1170,9 @@ a[href] {
 }
 
 .task-editor,
-.task-list-section {
+.task-list-section,
+.reminder-editor,
+.reminder-list-section {
   min-width: 0;
   padding: 18px;
   border: 1px solid var(--line);
@@ -1178,13 +1181,16 @@ a[href] {
   box-shadow: 0 10px 28px color-mix(in srgb, var(--ink) 7%, transparent);
 }
 
-.task-list-section {
+.task-list-section,
+.reminder-list-section {
   grid-column: 2;
   grid-row: 1 / span 2;
 }
 
 .task-section-heading,
-.task-card-heading {
+.task-card-heading,
+.reminder-section-heading,
+.reminder-card-heading {
   display: flex;
   align-items: start;
   justify-content: space-between;
@@ -1192,11 +1198,13 @@ a[href] {
   gap: 12px;
 }
 
-.task-section-heading {
+.task-section-heading,
+.reminder-section-heading {
   margin-bottom: 16px;
 }
 
-.task-section-heading span {
+.task-section-heading span,
+.reminder-section-heading span {
   color: var(--ink-muted);
   font-size: 10px;
   font-weight: 700;
@@ -1205,22 +1213,28 @@ a[href] {
 
 .task-section-heading h2,
 .task-card h3,
-.task-confirmation h2 {
+.task-confirmation h2,
+.reminder-section-heading h2,
+.reminder-card h3,
+.reminder-confirmation h2 {
   margin: 3px 0 0;
   color: var(--ink);
   font-family: Georgia, "Songti SC", serif;
 }
 
-.task-section-heading h2 {
+.task-section-heading h2,
+.reminder-section-heading h2 {
   font-size: 19px;
 }
 
-.task-form {
+.task-form,
+.reminder-form {
   display: grid;
   gap: 13px;
 }
 
-.task-form label {
+.task-form label,
+.reminder-form label {
   display: grid;
   gap: 6px;
   color: var(--ink);
@@ -1229,7 +1243,8 @@ a[href] {
 }
 
 .task-form input,
-.task-form textarea {
+.task-form textarea,
+.reminder-form input {
   width: 100%;
   min-width: 0;
   padding: 10px 11px;
@@ -1249,7 +1264,8 @@ a[href] {
 .primary-button,
 .quiet-button,
 .danger-button,
-.task-actions button {
+.task-actions button,
+.reminder-actions button {
   min-height: 38px;
   padding: 8px 13px;
   border: 1px solid var(--border);
@@ -1274,24 +1290,28 @@ a[href] {
 
 .primary-button:disabled,
 .danger-button:disabled,
-.task-actions button:disabled {
+.task-actions button:disabled,
+.reminder-actions button:disabled {
   cursor: default;
   opacity: 0.55;
 }
 
-.task-notice {
+.task-notice,
+.reminder-notice {
   min-height: 20px;
   margin: 0;
   color: var(--ink-muted);
   font-size: 12px;
 }
 
-.task-list {
+.task-list,
+.reminder-list {
   display: grid;
   gap: 11px;
 }
 
-.task-card {
+.task-card,
+.reminder-card {
   min-width: 0;
   padding: 15px;
   border: 1px solid var(--line);
@@ -1299,17 +1319,21 @@ a[href] {
   background: var(--surface);
 }
 
-.task-card[data-completed="true"] {
+.task-card[data-completed="true"],
+.reminder-card[data-delivery-state="dismissed"],
+.reminder-card[data-delivery-state="cancelled"] {
   opacity: 0.78;
 }
 
-.task-card-heading h3 {
+.task-card-heading h3,
+.reminder-card-heading h3 {
   min-width: 0;
   font-size: 16px;
   overflow-wrap: anywhere;
 }
 
-.task-card-heading > span {
+.task-card-heading > span,
+.reminder-card-heading > span {
   flex: 0 0 auto;
   padding: 4px 8px;
   border-radius: 999px;
@@ -1319,7 +1343,8 @@ a[href] {
   font-weight: 700;
 }
 
-.task-card > p {
+.task-card > p,
+.reminder-card > p {
   margin: 10px 0 0;
   color: var(--ink-muted);
   font-size: 12px;
@@ -1327,23 +1352,27 @@ a[href] {
   overflow-wrap: anywhere;
 }
 
-.task-card .task-deadline {
+.task-card .task-deadline,
+.reminder-card .reminder-due {
   font-size: 11px;
 }
 
-.task-actions {
+.task-actions,
+.reminder-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 13px;
 }
 
-.task-actions button {
+.task-actions button,
+.reminder-actions button {
   min-height: 34px;
   padding: 6px 10px;
 }
 
-.task-state {
+.task-state,
+.reminder-state {
   margin: 0;
   padding: 28px 16px;
   border: 1px dashed var(--border);
@@ -1352,7 +1381,8 @@ a[href] {
   text-align: center;
 }
 
-.task-state p {
+.task-state p,
+.reminder-state p {
   margin: 0 0 12px;
 }
 
@@ -1372,7 +1402,8 @@ a[href] {
   backdrop-filter: blur(5px);
 }
 
-.task-confirmation {
+.task-confirmation,
+.reminder-confirmation {
   position: relative;
   width: min(420px, 100%);
   padding: 22px;
@@ -1383,34 +1414,73 @@ a[href] {
   box-shadow: 0 24px 70px color-mix(in srgb, var(--ink) 28%, transparent);
 }
 
-.task-confirmation > span {
+.task-confirmation > span,
+.reminder-confirmation > span {
   color: var(--ink-muted);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
 
-.task-confirmation h2 {
+.task-confirmation h2,
+.reminder-confirmation h2 {
   font-size: 21px;
 }
 
-.task-confirmation p {
+.task-confirmation p,
+.reminder-confirmation p {
   margin: 12px 0 20px;
   color: var(--ink-muted);
   line-height: 1.65;
 }
 
-.task-confirmation .confirmation-status {
+.task-confirmation .confirmation-status,
+.reminder-confirmation .confirmation-status {
   min-height: 18px;
   margin: -8px 0 12px;
   color: #a43d49;
   font-size: 12px;
 }
 
-.task-confirmation > div {
+.task-confirmation > div,
+.reminder-confirmation > div {
   display: flex;
   justify-content: flex-end;
   gap: 9px;
+}
+
+.reminder-details {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.reminder-details > p {
+  margin: 0;
+}
+
+.reminder-details dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.reminder-details dl > div {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.reminder-details dt {
+  font-weight: 700;
+}
+
+.reminder-details dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 .placeholder-grid h2 {
@@ -1603,11 +1673,13 @@ a[href] {
 }
 
 @media (max-width: 720px) {
-  .tasks-page {
+  .tasks-page,
+  .reminders-page {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .task-list-section {
+  .task-list-section,
+  .reminder-list-section {
     grid-column: 1;
     grid-row: auto;
   }

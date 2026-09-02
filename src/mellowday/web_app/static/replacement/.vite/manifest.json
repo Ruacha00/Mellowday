@@ -1,6 +1,6 @@
 {
   "index.html": {
-    "file": "assets/index-CGYhEFYY.js",
+    "file": "assets/index-D7Ubilzu.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -8,7 +8,7 @@
       "src/appShell/ManagementDetails.tsx"
     ],
     "css": [
-      "assets/index-N65APHw1.css"
+      "assets/index-DB3On3-b.css"
     ],
     "assets": [
       "assets/fonts/inter-latin-400-normal-C38fXH4l.woff2",
@@ -24,7 +24,7 @@
     "src": "node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2"
   },
   "src/appShell/ManagementDetails.tsx": {
-    "file": "assets/chunks/ManagementDetails-DXOv2ZTH.js",
+    "file": "assets/chunks/ManagementDetails-lzV0ZYjQ.js",
     "name": "ManagementDetails",
     "src": "src/appShell/ManagementDetails.tsx",
     "isDynamicEntry": true,
