@@ -1,6 +1,6 @@
 {
   "index.html": {
-    "file": "assets/index-CUXC69JW.js",
+    "file": "assets/index-D3hi1t_W.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -8,7 +8,7 @@
       "src/MigrationDetails.tsx"
     ],
     "css": [
-      "assets/index-TpM8FRZ5.css"
+      "assets/index-jFoO8Zlo.css"
     ],
     "assets": [
       "assets/fonts/inter-latin-400-normal-C38fXH4l.woff2",
@@ -24,7 +24,7 @@
     "src": "node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2"
   },
   "src/MigrationDetails.tsx": {
-    "file": "assets/chunks/MigrationDetails-D-WKPhaz.js",
+    "file": "assets/chunks/MigrationDetails-DhDAbE4z.js",
     "name": "MigrationDetails",
     "src": "src/MigrationDetails.tsx",
     "isDynamicEntry": true,

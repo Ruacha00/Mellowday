@@ -1,0 +1,1 @@
+import{t as e}from"../index-D3hi1t_W.js";var t=e();function n(){return(0,t.jsx)(`p`,{className:`runtime-status`,children:`Vite runtime assets are available through the Python static host.`})}export{n as default};

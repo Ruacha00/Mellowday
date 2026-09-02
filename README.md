@@ -52,6 +52,7 @@ Tool, Skill, and Provider contracts are documented in
 
 ```bash
 npm --prefix frontend ci
+npm --prefix frontend test
 npm --prefix frontend run check
 npm --prefix frontend run build
 python -m mypy src build_backend.py

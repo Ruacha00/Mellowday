@@ -76,10 +76,12 @@ def test_react_replacement_renders_from_the_python_static_host(
             else None,
         )
         page.goto(f"{base_url}/replacement")
-        page.wait_for_load_state("networkidle")
 
         expect(
             page.get_by_role("heading", name="Mellowday React migration")
+        ).to_be_visible()
+        expect(
+            page.get_by_text("已加载存储会话。", exact=True)
         ).to_be_visible()
         expect(
             page.get_by_text(
@@ -87,6 +89,75 @@ def test_react_replacement_renders_from_the_python_static_host(
             )
         ).to_be_visible()
         assert console_errors == []
+        browser.close()
+
+
+def test_react_replacement_loads_history_and_appends_one_live_reminder(
+    tmp_path: Path,
+) -> None:
+    now = 1_788_200_100.0
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+        reminder_clock=lambda: now,
+        reminder_poll_interval=0.05,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        with Client(base_url=base_url) as client:
+            stored = client.post(
+                "/api/chat",
+                json={
+                    "conversation_id": "main",
+                    "content": "Stored replacement tracer",
+                },
+            )
+        assert stored.status_code == 200
+
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        live_requests: list[str] = []
+        page.on(
+            "request",
+            lambda request: live_requests.append(request.url)
+            if "/api/conversations/main/live" in request.url
+            else None,
+        )
+        page.goto(f"{base_url}/replacement")
+
+        transcript = page.get_by_label("会话记录")
+        expect(
+            transcript.get_by_text("Stored replacement tracer", exact=True)
+        ).to_be_visible()
+        expect(
+            transcript.get_by_text(
+                "I heard: Stored replacement tracer", exact=True
+            )
+        ).to_be_visible()
+
+        due_at = datetime.fromtimestamp(now - 1, timezone.utc).isoformat()
+        with Client(base_url=base_url) as client:
+            created = client.post(
+                "/api/settings/reminders",
+                json={"message": "Fixture live event", "due_at": due_at},
+            )
+        assert created.status_code == 201
+
+        live_message = transcript.get_by_text(
+            "Mellowday reminder: Fixture live event", exact=True
+        )
+        expect(live_message).to_be_visible(timeout=5_000)
+        expect(live_message).to_have_count(1)
+        assert len(live_requests) == 1
+
+        page.reload()
+        restarted_transcript = page.get_by_label("会话记录")
+        expect(
+            restarted_transcript.get_by_text(
+                "Mellowday reminder: Fixture live event", exact=True
+            )
+        ).to_have_count(1)
         browser.close()
 
 
