@@ -18,4 +18,5 @@ __pycache__/
 build/
 dist/
 /.scratch/
-开发路径.txt
+开发路径.md
+
