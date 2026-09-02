@@ -1,6 +1,8 @@
 import { lazy, Suspense, type RefObject } from "react";
 
 import { AppearanceControls, AppearancePopover } from "../appearance/Appearance";
+import { LifeTasksPage } from "../life/LifeTasksPage";
+import type { TaskService } from "../services/taskApi";
 import type { DesktopWindowControls } from "./desktopCapability";
 import {
   lifeDestinations,
@@ -104,7 +106,13 @@ export function PageHeading({
   );
 }
 
-export function ManagementPage({ route }: { route: AppRoute }) {
+export function ManagementPage({
+  route,
+  taskService,
+}: {
+  route: AppRoute;
+  taskService: TaskService;
+}) {
   const destinations = route.area === "life"
     ? lifeDestinations
     : route.area === "settings"
@@ -133,7 +141,9 @@ export function ManagementPage({ route }: { route: AppRoute }) {
           ))}
         </nav>
       ) : null}
-      {isAppearancePage ? (
+      {route.hash === "#/life/tasks" ? (
+        <LifeTasksPage service={taskService} />
+      ) : isAppearancePage ? (
         <AppearanceControls />
       ) : (
         <Suspense fallback={<p className="management-loading">正在载入页面内容…</p>}>

@@ -302,7 +302,7 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
                 sending={conversationSession.sending}
               />
             ) : (
-              <ManagementPage route={route} />
+              <ManagementPage route={route} taskService={services.tasks} />
             )}
           </main>
         </div>

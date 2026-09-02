@@ -6,10 +6,12 @@ import {
   ApplicationLiveEventService,
   type LiveEventService,
 } from "./liveEvents";
+import { HttpTaskService, type TaskService } from "./taskApi";
 
 export interface ApplicationServices {
   conversation: ConversationService;
   liveEvents: LiveEventService;
+  tasks: TaskService;
 }
 
 export function createBrowserApplicationServices(): ApplicationServices {
@@ -20,6 +22,7 @@ export function createBrowserApplicationServices(): ApplicationServices {
   return {
     conversation: new HttpConversationService(),
     liveEvents,
+    tasks: new HttpTaskService(),
   };
 }
 

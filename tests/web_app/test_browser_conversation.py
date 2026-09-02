@@ -1281,6 +1281,187 @@ def test_user_can_manage_tasks_from_settings(tmp_path: Path) -> None:
         browser.close()
 
 
+def test_replacement_life_tasks_supports_the_complete_task_lifecycle(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url:
+        with Client(base_url=base_url) as client:
+            client.post(
+                "/api/settings/tasks",
+                json={"title": "Read spec", "details": "Issue 38"},
+            )
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 520, "height": 640})
+            page.goto(f"{base_url}/replacement#/life")
+
+            expect(page).to_have_url(f"{base_url}/replacement#/life/tasks")
+            expect(page.get_by_role("navigation", name="生活二级导航")).to_be_visible()
+            expect(page.get_by_text("Read spec", exact=True)).to_be_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+
+            title = page.get_by_label("任务标题", exact=True)
+            title.fill("Submit report")
+            page.get_by_label("任务详情", exact=True).fill("Attach charts")
+            page.get_by_label("截止日期", exact=True).fill("2026-09-04")
+            page.get_by_role("button", name="添加任务", exact=True).click()
+
+            task_status = page.get_by_role("status", name="任务状态")
+            expect(task_status).to_contain_text("任务已添加")
+            expect(page.get_by_text("Submit report", exact=True)).to_be_visible()
+            expect(page.get_by_text("Attach charts", exact=True)).to_be_visible()
+
+            page.get_by_role("button", name="完成 Submit report").click()
+            expect(page.get_by_role("button", name="重新打开 Submit report")).to_be_visible()
+            page.get_by_role("button", name="编辑 Submit report").click()
+            expect(title).to_be_focused()
+            title.fill("Send report")
+            page.get_by_role("button", name="保存任务", exact=True).click()
+            expect(page.get_by_text("Send report", exact=True)).to_be_visible()
+
+            delete_button = page.get_by_role("button", name="删除 Send report")
+            delete_button.click()
+            confirmation = page.get_by_role("dialog", name="删除任务")
+            expect(confirmation).to_contain_text("Send report")
+            cancel_delete = confirmation.get_by_role("button", name="取消", exact=True)
+            confirm_delete = confirmation.get_by_role(
+                "button", name="确认删除", exact=True
+            )
+            expect(cancel_delete).to_be_focused()
+            page.keyboard.press("Shift+Tab")
+            expect(confirm_delete).to_be_focused()
+            page.keyboard.press("Tab")
+            expect(cancel_delete).to_be_focused()
+            page.keyboard.press("Escape")
+            expect(confirmation).not_to_be_visible()
+            expect(delete_button).to_be_focused()
+            expect(task_status).to_contain_text("已取消删除任务")
+
+            delete_button.click()
+            page.get_by_role("button", name="确认删除", exact=True).click()
+            expect(task_status).to_contain_text("任务已删除")
+            expect(page.get_by_text("Send report", exact=True)).not_to_be_visible()
+            browser.close()
+
+
+def test_replacement_life_tasks_covers_inactive_load_and_visible_states(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 520, "height": 640})
+        delayed_routes = []
+
+        def delay_task_list(route, request) -> None:
+            if request.method == "GET":
+                delayed_routes.append(route)
+            else:
+                route.continue_()
+
+        page.route("**/api/settings/tasks", delay_task_list)
+        page.goto(f"{base_url}/replacement#/life/tasks")
+        expect(page.get_by_text("正在加载任务…", exact=True)).to_be_visible()
+        page.get_by_role("link", name="今日", exact=True).click()
+        expect(page.get_by_role("heading", name="今天", exact=True)).to_be_visible()
+        assert delayed_routes
+        delayed_routes[0].fulfill(
+            status=200,
+            content_type="application/json",
+            body='{"tasks":[{"id":"late","title":"Late task","details":null,'
+            '"completed":false,"deadline":null,"created_at":1,'
+            '"updated_at":1,"completed_at":null}]}',
+        )
+        expect(page.get_by_text("Late task", exact=True)).not_to_be_visible()
+
+        page.unroute("**/api/settings/tasks", delay_task_list)
+        page.route(
+            "**/api/settings/tasks",
+            lambda route, request: route.fulfill(status=503, body="Unavailable")
+            if request.method == "GET"
+            else route.continue_(),
+        )
+        page.goto(f"{base_url}/replacement#/life/tasks")
+        expect(page.get_by_role("alert")).to_contain_text("任务加载失败")
+
+        page.unroute("**/api/settings/tasks")
+        page.get_by_role("button", name="重试", exact=True).click()
+        expect(page.get_by_text("还没有任务。", exact=True)).to_be_visible()
+
+        page.get_by_role("button", name="添加任务", exact=True).click()
+        expect(page.get_by_role("status", name="任务状态")).to_contain_text(
+            "请输入任务标题"
+        )
+        expect(page.get_by_label("任务标题", exact=True)).to_be_focused()
+
+        page.emulate_media(reduced_motion="reduce")
+        transition_duration = page.locator(".task-editor").evaluate(
+            "node => getComputedStyle(node).transitionDuration"
+        )
+        assert transition_duration in {"0.01ms", "1e-05s"}
+
+        delayed_mutations = []
+        unexpected_task_loads = []
+
+        def delay_task_create(route, request) -> None:
+            if request.method == "POST":
+                delayed_mutations.append(route)
+            elif request.method == "GET":
+                unexpected_task_loads.append(request)
+                route.continue_()
+            else:
+                route.continue_()
+
+        page.route("**/api/settings/tasks", delay_task_create)
+        page.get_by_label("任务标题", exact=True).fill("Delayed task")
+        page.get_by_role("button", name="添加任务", exact=True).click()
+        page.get_by_role("link", name="今日", exact=True).click()
+        expect(page.get_by_role("heading", name="今天", exact=True)).to_be_visible()
+        assert delayed_mutations
+        delayed_mutations[0].fulfill(
+            status=201,
+            content_type="application/json",
+            body='{"task":{"id":"delayed","title":"Delayed task",'
+            '"details":null,"completed":false,"deadline":null,'
+            '"created_at":1,"updated_at":1,"completed_at":null}}',
+        )
+        page.wait_for_timeout(100)
+        assert unexpected_task_loads == []
+        page.unroute("**/api/settings/tasks", delay_task_create)
+
+        with Client(base_url=base_url) as client:
+            client.post("/api/settings/tasks", json={"title": "Delete failure"})
+        page.goto(f"{base_url}/replacement#/life/tasks")
+        delete_button = page.get_by_role("button", name="删除 Delete failure")
+
+        def fail_delete_decision(route, request) -> None:
+            if request.method == "DELETE":
+                route.fulfill(status=503, body="Unavailable")
+            else:
+                route.continue_()
+
+        page.route("**/api/settings/tasks/**", fail_delete_decision)
+        delete_button.click()
+        confirmation = page.get_by_role("dialog", name="删除任务")
+        confirmation.get_by_role("button", name="确认删除", exact=True).click()
+        expect(confirmation.get_by_role("status", name="删除状态")).to_contain_text(
+            "任务删除失败"
+        )
+        browser.close()
+
+
 def test_user_can_manage_and_search_notes_from_settings(tmp_path: Path) -> None:
     class NoteProvider:
         name = "note-surface-script"
