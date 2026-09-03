@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal, assert_never, cast
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -142,6 +142,10 @@ class ConfirmationDecisionBody(BaseModel):
 
 class ConversationResetDecisionBody(ConfirmationDecisionBody):
     confirmation_id: str
+
+
+class ConversationTitleBody(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
 
 
 class ApplicationConfirmationDecisionBody(ConfirmationDecisionBody):
@@ -447,6 +451,7 @@ def create_app(
             delivery.conversation_id,
             ChatContent(role="assistant", content=content),
             deduplication_key=f"reminder:{delivery.reminder_id}",
+            source="reminder",
         )
         if not appended:
             return
@@ -464,6 +469,7 @@ def create_app(
             delivery.conversation_id,
             ChatContent(role="assistant", content=delivery.content),
             deduplication_key=f"proactive-chat:{delivery.evaluation_id}",
+            source="proactive_chat",
         )
         if not appended:
             return
@@ -653,11 +659,11 @@ def create_app(
 
     @app.get("/", response_class=FileResponse)
     async def conversation_surface() -> FileResponse:
-        return FileResponse(_STATIC_DIRECTORY / "index.html")
-
-    @app.get("/replacement", response_class=FileResponse)
-    async def replacement_surface() -> FileResponse:
         return FileResponse(_REPLACEMENT_DIRECTORY / "index.html")
+
+    @app.get("/replacement", response_class=RedirectResponse)
+    async def replacement_surface() -> RedirectResponse:
+        return RedirectResponse(url="/", status_code=308)
 
     @app.get("/healthz")
     async def health() -> dict[str, bool]:
@@ -833,8 +839,27 @@ def create_app(
             raise HTTPException(status_code=404, detail="Conversation not found")
         return {
             "conversation": asdict(conversation.summary),
-            "messages": [asdict(message) for message in conversation.messages],
+            "messages": [
+                {
+                    key: value
+                    for key, value in asdict(message).items()
+                    if value is not None
+                }
+                for message in conversation.messages
+            ],
         }
+
+    @app.put("/api/conversations/{conversation_id}")
+    async def rename_conversation(
+        conversation_id: str, body: ConversationTitleBody
+    ) -> dict[str, object]:
+        title = body.title.strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="Conversation title is required")
+        conversation = conversation_history.rename(conversation_id, title)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"conversation": asdict(conversation)}
 
     @app.post("/api/conversations/{conversation_id}/reset")
     async def reset_conversation(

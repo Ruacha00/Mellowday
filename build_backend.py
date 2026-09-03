@@ -18,7 +18,8 @@ _FRONTEND_OUTPUT = (
 _MANIFEST_PATH = _FRONTEND_OUTPUT / ".vite" / "manifest.json"
 _STATIC_URL_PREFIX = "/static/replacement/"
 _BUILT_URL_PATTERN = re.compile(
-    r"(?:src|href)=[\"']([^\"']+)[\"']|url\(\s*[\"']?([^\"')\s]+)",
+    re.escape(_STATIC_URL_PREFIX)
+    + r"[A-Za-z0-9._~!&()*+,;=:@%/-]+\.(?:css|html|js|json|png|svg|webp|woff2|woff)",
     re.IGNORECASE,
 )
 
@@ -57,13 +58,14 @@ def _manifest_paths(manifest: Mapping[str, Any]) -> Iterable[str]:
 
 def _built_url_paths(files: Iterable[Path]) -> Iterable[str]:
     for file_path in files:
-        if file_path.suffix not in {".css", ".html"}:
+        if (
+            file_path.suffix not in {".css", ".html", ".js"}
+            or not file_path.is_file()
+        ):
             continue
         content = file_path.read_text(encoding="utf-8")
         for match in _BUILT_URL_PATTERN.finditer(content):
-            reference = match.group(1) or match.group(2)
-            if reference.startswith(_STATIC_URL_PREFIX):
-                yield reference.removeprefix(_STATIC_URL_PREFIX)
+            yield match.group(0).removeprefix(_STATIC_URL_PREFIX)
 
 
 def _validate_frontend_output() -> None:

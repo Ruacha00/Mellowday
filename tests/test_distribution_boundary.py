@@ -23,6 +23,26 @@ _FORBIDDEN_IMPLEMENTATION_MARKERS = (
     "skill.md",
 )
 
+_THEME_ASSET_ROOT = "mellowday/web_app/static/replacement/runtime/themes/"
+_THEME_ASSET_NAMES = {
+    f"{theme}-{role}.{extension}"
+    for theme in ("sky", "sakura", "mint", "night")
+    for role, extension in (
+        ("emblem", "webp"),
+        ("corner", "webp"),
+        ("motif", "svg"),
+    )
+}
+
+_VISUAL_BASELINE_ROOT = Path("docs/visual-baselines/issue-48")
+_VISUAL_BASELINE_NAMES = {
+    "appearance-narrow.png",
+    "minimal-narrow.png",
+    "night-desktop.png",
+    "recent-conversation-drawer.png",
+    "sky-desktop.png",
+}
+
 
 def _copy_distribution_project(destination: Path) -> Path:
     isolated_project = destination / "project"
@@ -75,7 +95,9 @@ def test_distribution_builds_without_the_reference_tree(tmp_path: Path) -> None:
         )
         metadata = archive.read(metadata_name).decode("utf-8")
 
-    assert "mellowday/web_app/static/index.html" in packaged_files
+    assert "mellowday/web_app/static/index.html" not in packaged_files
+    assert "mellowday/web_app/static/app.js" not in packaged_files
+    assert "mellowday/web_app/static/styles.css" not in packaged_files
     replacement_root = "mellowday/web_app/static/replacement/"
     replacement_files = [
         name for name in packaged_files if name.startswith(replacement_root)
@@ -117,6 +139,11 @@ def test_distribution_builds_without_the_reference_tree(tmp_path: Path) -> None:
         if line.startswith("Requires-Dist: ")
     ]
     assert all("chatbot" not in requirement for requirement in requirements)
+    assert any(
+        requirement.startswith("tzdata>=2024.1")
+        and 'sys_platform == "win32"' in requirement
+        for requirement in requirements
+    )
     project = tomllib.loads(
         (isolated_project / "pyproject.toml").read_text(encoding="utf-8")
     )
@@ -124,6 +151,103 @@ def test_distribution_builds_without_the_reference_tree(tmp_path: Path) -> None:
         "chatbot" not in dependency.casefold()
         for dependency in project["project"]["dependencies"]
     )
+
+
+def test_web_app_frontend_has_no_node_or_electron_runtime_access() -> None:
+    forbidden = (
+        'from "node:',
+        "from 'node:",
+        'from "electron"',
+        "from 'electron'",
+        "ipcrenderer",
+        "window.require",
+    )
+    sources = [
+        path.read_text(encoding="utf-8").casefold()
+        for path in Path("frontend/src").rglob("*")
+        if path.suffix in {".ts", ".tsx"}
+    ]
+    assert all(marker not in source for source in sources for marker in forbidden)
+
+
+def test_production_visual_baseline_set_is_bounded() -> None:
+    baselines = {
+        path.name for path in _VISUAL_BASELINE_ROOT.glob("*.png") if path.is_file()
+    }
+    assert baselines == _VISUAL_BASELINE_NAMES
+    for name in baselines:
+        payload = (_VISUAL_BASELINE_ROOT / name).read_bytes()
+        assert payload.startswith(b"\x89PNG\r\n\x1a\n")
+        assert len(payload) > 10_000
+
+
+def test_distribution_packages_exactly_twelve_production_theme_roles(
+    tmp_path: Path,
+) -> None:
+    isolated_project = _copy_distribution_project(tmp_path)
+    wheelhouse = tmp_path / "wheelhouse"
+    completed = _build_wheel(isolated_project, wheelhouse)
+
+    assert completed.returncode == 0, completed.stderr
+    wheel = next(wheelhouse.glob("mellowday-*.whl"))
+    with zipfile.ZipFile(wheel) as archive:
+        packaged_assets = {
+            name.removeprefix(_THEME_ASSET_ROOT)
+            for name in archive.namelist()
+            if name.startswith(_THEME_ASSET_ROOT)
+        }
+        assert packaged_assets == _THEME_ASSET_NAMES
+        for theme in ("sky", "sakura", "mint", "night"):
+            payload = archive.read(
+                f"{_THEME_ASSET_ROOT}{theme}-corner.webp"
+            )
+            width, height, has_alpha = _webp_canvas(payload)
+            assert width >= 2048
+            assert width >= 980 * 2
+            assert height > 0
+            assert has_alpha
+
+
+def test_distribution_rejects_a_missing_referenced_theme_asset(
+    tmp_path: Path,
+) -> None:
+    isolated_project = _copy_distribution_project(tmp_path)
+    missing = (
+        isolated_project
+        / "src"
+        / "mellowday"
+        / "web_app"
+        / "static"
+        / "replacement"
+        / "runtime"
+        / "themes"
+        / "sky-corner.webp"
+    )
+    missing.unlink()
+
+    completed = _build_wheel(isolated_project, tmp_path / "wheelhouse")
+
+    assert completed.returncode != 0
+    assert "Frontend build artifact is missing" in (
+        completed.stdout + completed.stderr
+    )
+
+
+def _webp_canvas(payload: bytes) -> tuple[int, int, bool]:
+    assert payload[:4] == b"RIFF"
+    assert payload[8:12] == b"WEBP"
+    offset = 12
+    while offset + 8 <= len(payload):
+        chunk = payload[offset : offset + 4]
+        length = int.from_bytes(payload[offset + 4 : offset + 8], "little")
+        data = payload[offset + 8 : offset + 8 + length]
+        if chunk == b"VP8X":
+            assert len(data) >= 10
+            width = 1 + int.from_bytes(data[4:7], "little")
+            height = 1 + int.from_bytes(data[7:10], "little")
+            return width, height, bool(data[0] & 0b0001_0000)
+        offset += 8 + length + (length % 2)
+    raise AssertionError("WebP is missing its extended canvas header")
 
 
 def test_distribution_rejects_a_missing_referenced_frontend_artifact(

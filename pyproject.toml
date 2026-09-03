@@ -8,10 +8,12 @@ name = "mellowday"
 version = "0.1.0"
 description = "A self-hosted personal daily assistant"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.110,<1.0",
     "httpx>=0.27,<1.0",
+    "tzdata>=2024.1; sys_platform == 'win32'",
     "uvicorn>=0.29,<1.0",
 ]
 
@@ -35,9 +37,6 @@ include-package-data = false
 
 [tool.setuptools.package-data]
 "mellowday.web_app" = [
-    "static/app.js",
-    "static/index.html",
-    "static/styles.css",
     "static/replacement/**/*",
     "static/replacement/.vite/*",
 ]

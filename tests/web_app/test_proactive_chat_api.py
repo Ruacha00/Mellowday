@@ -126,11 +126,14 @@ def test_scheduler_delivers_to_conversation_and_audits_without_prompt(
                         break
                     await asyncio.sleep(0.01)
                 audit = await client.get("/api/settings/audit")
-                javascript = await client.get("/static/app.js")
 
         assert conversation.status_code == 200
         assert conversation.json()["messages"] == [
-            {"role": "assistant", "content": "A gentle local check-in."}
+            {
+                "role": "assistant",
+                "content": "A gentle local check-in.",
+                "source": "proactive_chat",
+            }
         ]
         assert len(provider.requests) == 1
         assert provider.requests[0].tools == ()
@@ -151,7 +154,5 @@ def test_scheduler_delivers_to_conversation_and_audits_without_prompt(
             "life_record_count": 0,
         }
         assert "content" not in proactive_events[0]["details"]
-        assert "proactive_chat" in javascript.text
-        assert "deliveredProactiveChatIds" in javascript.text
 
     asyncio.run(exercise())

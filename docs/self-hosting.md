@@ -12,6 +12,25 @@ schedulers, and the health endpoint in one process.
 - A writable local directory for Mellowday data
 - Chromium installed by Playwright only when running the browser test suite
 
+## Quick Windows source deployment
+
+The repository-root launcher keeps source-checkout setup, startup, and release
+packaging on one documented path:
+
+```powershell
+.\mellowday.ps1 start -Timezone Asia/Shanghai
+```
+
+On the first run it creates `.venv`, installs the locked frontend dependencies,
+builds the production React application, and installs Mellowday. Later starts
+reuse that environment. Run `.\mellowday.ps1 setup` after changing or updating
+frontend dependencies, and use `-DataDirectory D:\MellowdayData` when the
+default Windows user-data directory is not desired.
+
+This launcher starts the supported browser mode. The planned Electron Desktop
+Application, per-User installer, and portable bundle are not part of the current
+release yet.
+
 ## Install from a clean checkout
 
 Create and activate a virtual environment, then install the project:
@@ -100,6 +119,14 @@ configured while Settings and local management remain available.
 ## Test and build
 
 From a clean checkout, install development requirements and the test browser:
+
+```powershell
+.\mellowday.ps1 package
+```
+
+That command installs the verification dependencies, runs the complete frontend,
+type-checking, Python, API, and browser gate, then creates a wheel in `dist\`.
+The equivalent manual commands are:
 
 ```powershell
 python -m pip install -r requirements-dev.txt

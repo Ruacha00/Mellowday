@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Protocol
 
 from .events import RuntimeEventLog
-from .types import ChatContent, EventType
+from .types import ChatContent, ChatRole, EventType
 
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,12 +25,21 @@ class ConversationSummary:
     character_count: int
     created_at: float
     updated_at: float
+    title: str | None
+    preview: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class StoredMessage:
+    role: ChatRole
+    content: str
+    source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class StoredConversation:
     summary: ConversationSummary
-    messages: tuple[ChatContent, ...]
+    messages: tuple[StoredMessage, ...]
 
 
 class ConversationHistory(Protocol):
@@ -123,6 +132,20 @@ class SQLiteConversationHistory:
                     PRAGMA user_version = 2;
                     """
                 )
+            if version < 3:
+                connection.executescript(
+                    """
+                    ALTER TABLE conversation_messages ADD COLUMN source TEXT;
+                    PRAGMA user_version = 3;
+                    """
+                )
+            if version < 4:
+                connection.executescript(
+                    """
+                    ALTER TABLE conversations ADD COLUMN title TEXT;
+                    PRAGMA user_version = 4;
+                    """
+                )
         self._emit(
             "conversation_history_initialized",
             from_version=version,
@@ -201,6 +224,7 @@ class SQLiteConversationHistory:
         message: ChatContent,
         *,
         deduplication_key: str,
+        source: str | None = None,
     ) -> bool:
         """Append one message once for an idempotent external delivery."""
 
@@ -228,10 +252,16 @@ class SQLiteConversationHistory:
                 connection.execute(
                     """
                     INSERT INTO conversation_messages(
-                        conversation_id, role, content, created_at
-                    ) VALUES (?, ?, ?, ?)
+                        conversation_id, role, content, created_at, source
+                    ) VALUES (?, ?, ?, ?, ?)
                     """,
-                    (conversation_id, message.role, message.content, occurred_at),
+                    (
+                        conversation_id,
+                        message.role,
+                        message.content,
+                        occurred_at,
+                        source,
+                    ),
                 )
                 connection.execute(
                     """
@@ -318,7 +348,7 @@ class SQLiteConversationHistory:
                     return None
                 message_rows = connection.execute(
                     """
-                    SELECT role, content
+                    SELECT role, content, source
                     FROM conversation_messages
                     WHERE conversation_id = ?
                     ORDER BY message_id
@@ -328,7 +358,11 @@ class SQLiteConversationHistory:
         conversation = StoredConversation(
             summary=self._summary_from_row(row),
             messages=tuple(
-                ChatContent(role=message["role"], content=message["content"])
+                StoredMessage(
+                    role=message["role"],
+                    content=message["content"],
+                    source=message["source"],
+                )
                 for message in message_rows
             ),
         )
@@ -339,6 +373,22 @@ class SQLiteConversationHistory:
             message_count=len(conversation.messages),
         )
         return conversation
+
+    def rename(
+        self, conversation_id: str, title: str
+    ) -> ConversationSummary | None:
+        with self._diagnose("rename", conversation_id=conversation_id):
+            with self._connect() as connection:
+                updated = connection.execute(
+                    "UPDATE conversations SET title = ? WHERE conversation_id = ?",
+                    (title, conversation_id),
+                )
+                if updated.rowcount == 0:
+                    return None
+                rows = self._conversation_summaries(
+                    connection, conversation_id=conversation_id
+                )
+        return self._summary_from_row(rows[0])
 
     def reset(self, conversation_id: str) -> int:
         with self._diagnose("reset", conversation_id=conversation_id):
@@ -377,7 +427,17 @@ class SQLiteConversationHistory:
                 COALESCE(SUM(LENGTH(conversation_messages.content)), 0)
                     AS character_count,
                 conversations.created_at,
-                conversations.updated_at
+                conversations.updated_at,
+                conversations.title,
+                (
+                    SELECT preview_message.content
+                    FROM conversation_messages AS preview_message
+                    WHERE preview_message.conversation_id =
+                        conversations.conversation_id
+                      AND TRIM(preview_message.content) <> ''
+                    ORDER BY preview_message.message_id ASC
+                    LIMIT 1
+                ) AS preview
             FROM conversations
             LEFT JOIN conversation_messages USING (conversation_id)
             WHERE (? IS NULL OR conversations.conversation_id = ?)
@@ -396,6 +456,8 @@ class SQLiteConversationHistory:
             character_count=int(row["character_count"]),
             created_at=float(row["created_at"]),
             updated_at=float(row["updated_at"]),
+            title=None if row["title"] is None else str(row["title"]),
+            preview=None if row["preview"] is None else str(row["preview"]),
         )
 
 
@@ -405,4 +467,5 @@ __all__ = [
     "ConversationSummary",
     "SQLiteConversationHistory",
     "StoredConversation",
+    "StoredMessage",
 ]

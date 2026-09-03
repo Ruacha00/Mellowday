@@ -70,6 +70,10 @@ def test_conversation_history_survives_backend_restart_and_is_isolated(
         assert [row["conversation_id"] for row in rows] == ["beta", "alpha"]
         assert [row["message_count"] for row in rows] == [2, 2]
         assert [row["character_count"] for row in rows] == [41, 35]
+        assert [row["preview"] for row in rows] == [
+            "Separate message",
+            "First message",
+        ]
         assert all(row["created_at"] > 0 for row in rows)
         assert all(row["updated_at"] >= row["created_at"] for row in rows)
         assert alpha_history.status_code == 200
@@ -82,6 +86,41 @@ def test_conversation_history_survives_backend_restart_and_is_isolated(
             {"role": "user", "content": "Separate message"},
             {"role": "assistant", "content": "I heard: Separate message"},
         ]
+
+    asyncio.run(exercise_boundary())
+
+
+def test_conversation_title_can_be_renamed_and_is_validated(tmp_path: Path) -> None:
+    async def exercise_boundary() -> None:
+        app = create_app(
+            provider=FakeProvider(),
+            conversation_database_path=tmp_path / "mellowday.sqlite3",
+            audit_path=None,
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            created = await client.post(
+                "/api/chat",
+                json={"conversation_id": "planning", "content": "Plan the week"},
+            )
+            renamed = await client.put(
+                "/api/conversations/planning", json={"title": "  周计划  "}
+            )
+            invalid = await client.put(
+                "/api/conversations/planning", json={"title": "   "}
+            )
+            missing = await client.put(
+                "/api/conversations/missing", json={"title": "不存在"}
+            )
+            stored = await client.get("/api/conversations/planning")
+
+        assert created.status_code == 200
+        assert renamed.status_code == 200
+        assert renamed.json()["conversation"]["title"] == "周计划"
+        assert invalid.status_code == 422
+        assert missing.status_code == 404
+        assert stored.json()["conversation"]["title"] == "周计划"
 
     asyncio.run(exercise_boundary())
 
@@ -218,7 +257,7 @@ def test_settings_resets_only_selected_history_and_reports_structured_events(
         ]
         assert before_reset.json()["events"][0]["details"] == {
             "from_version": 0,
-            "schema_version": 2,
+            "schema_version": 4,
         }
         assert unconfirmed.status_code == 422
         assert cancel_requested.status_code == 200
