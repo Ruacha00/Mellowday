@@ -119,11 +119,11 @@ def test_replacement_history_reset_and_operation_records_are_route_owned(
                 == f"{base_url}/api/conversations"
             ):
                 delayed_history[0].continue_()
-            page.unroute("**/api/conversations", delay_history)
             history_item = page.locator(".history-list-item").filter(
                 has_text="A stored transcript"
             )
             expect(history_item).to_be_visible()
+            page.unroute("**/api/conversations", delay_history)
 
             def fail_history(route, request) -> None:
                 route.fulfill(status=503, body="Unavailable")
