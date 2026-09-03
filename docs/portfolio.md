@@ -8,11 +8,11 @@ Mellowday 是一个面向单用户的本地优先个人助手。项目同时处�
 flowchart LR
     U[用户] --> W[React / TypeScript Web App]
     W --> API[FastAPI Web App]
-    API --> PA[Personal Assistant]
-    PA --> AC[Agent Core]
+    API --> AC[Agent Core]
     AC --> P[可替换的模型 Provider]
+    API --> PA[Personal Assistant Services]
     PA --> D[(本地数据)]
-    API --> D
+    PA -. PA Tools / Context 注入 .-> AC
     S[受限调度器] --> PA
 ```
 
