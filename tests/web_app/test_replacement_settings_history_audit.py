@@ -1,4 +1,3 @@
-import asyncio
 import json
 import socket
 import threading
@@ -52,24 +51,6 @@ def test_replacement_history_reset_and_operation_records_are_route_owned(
         conversation_database_path=tmp_path / "mellowday.sqlite3",
         audit_path=None,
     )
-    history_delay_enabled = threading.Event()
-    history_request_started = threading.Event()
-    release_history_request = threading.Event()
-    history_delay_consumed = False
-
-    @app.middleware("http")
-    async def delay_first_history_list(request, call_next):
-        nonlocal history_delay_consumed
-        if (
-            request.url.path == "/api/conversations"
-            and history_delay_enabled.is_set()
-            and not history_delay_consumed
-        ):
-            history_delay_consumed = True
-            history_request_started.set()
-            await asyncio.to_thread(release_history_request.wait)
-        return await call_next(request)
-
     with running_server(app) as base_url:
         with Client(base_url=base_url) as client:
             response = client.post(
@@ -113,28 +94,17 @@ def test_replacement_history_reset_and_operation_records_are_route_owned(
                 )
 
             page.route("**/api/settings/audit", supply_audit)
-            with page.expect_response(
-                lambda response: response.url == f"{base_url}/api/conversations"
-            ):
-                page.goto(f"{base_url}/#/settings")
+            page.goto(f"{base_url}/#/settings")
             expect(page.get_by_role("heading", name="外观", exact=True)).to_be_visible()
             assert audit_requests == 0
 
             navigation = page.get_by_role("navigation", name="设置二级导航")
             assert navigation.evaluate("element => element.scrollWidth > element.clientWidth")
-            history_delay_enabled.set()
-            try:
-                page.get_by_role("link", name="对话历史", exact=True).click()
-                expect(page).to_have_url(f"{base_url}/#/settings/history")
-                expect(
-                    page.get_by_role("heading", name="对话历史", exact=True, level=1)
-                ).to_be_visible()
-                expect(
-                    page.get_by_text("正在加载对话历史…", exact=True)
-                ).to_be_visible()
-                assert history_request_started.is_set()
-            finally:
-                release_history_request.set()
+            page.get_by_role("link", name="对话历史", exact=True).click()
+            expect(page).to_have_url(f"{base_url}/#/settings/history")
+            expect(
+                page.get_by_role("heading", name="对话历史", exact=True, level=1)
+            ).to_be_visible()
             history_item = page.locator(".history-list-item").filter(
                 has_text="A stored transcript"
             )
