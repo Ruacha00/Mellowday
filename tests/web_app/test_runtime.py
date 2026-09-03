@@ -121,7 +121,7 @@ def test_migrate_and_consistent_backup_cover_all_local_state(tmp_path: Path) -> 
         encoding="utf-8"
     ) == "audit\n"
     with sqlite3.connect(backup_path / "mellowday.sqlite3") as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
 
     with pytest.raises(BackupError, match="already exists"):
         backup_installation(configuration, backup_path)

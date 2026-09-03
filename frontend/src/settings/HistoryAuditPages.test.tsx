@@ -9,6 +9,7 @@ import { OperationRecordsPage } from "./OperationRecordsPage";
 const conversationService: ConversationService = {
   listConversations: vi.fn(),
   loadConversation: vi.fn(),
+  renameConversation: vi.fn(),
   sendMessage: vi.fn(),
   listPendingConfirmations: vi.fn(),
   decideConfirmation: vi.fn(),

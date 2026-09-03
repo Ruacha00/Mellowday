@@ -661,7 +661,7 @@ def test_selecting_a_recent_conversation_returns_to_the_conversation_surface(
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1200, "height": 780})
         page.goto(f"{base_url}/#/today")
-        recent = page.locator(".recent-rail .recent-list button")
+        recent = page.locator(".recent-rail .recent-conversation-select")
         expect(recent.first).to_contain_text("Second conversation fixture")
         assert all(
             "project-internal-id" not in item for item in recent.all_inner_texts()
@@ -674,6 +674,94 @@ def test_selecting_a_recent_conversation_returns_to_the_conversation_surface(
                 "Second conversation fixture", exact=True
             )
         ).to_be_visible()
+        browser.close()
+
+
+def test_recent_conversation_controls_rename_cancel_and_delete_from_the_drawer(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        with Client(base_url=base_url) as client:
+            created = client.post(
+                "/api/chat",
+                json={"conversation_id": "planning", "content": "Plan the week"},
+            )
+        assert created.status_code == 200
+
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 780})
+        page.goto(f"{base_url}/#/conversation")
+        recent = page.get_by_role("region", name="最近对话")
+
+        recent.get_by_role("button", name="编辑“Plan the week”的标题").click()
+        title = recent.get_by_role("textbox", name="对话标题")
+        title.fill("暂不保存")
+        recent.get_by_role("button", name="取消编辑").click()
+        expect(recent.get_by_text("Plan the week", exact=True)).to_be_visible()
+
+        recent.get_by_role("button", name="编辑“Plan the week”的标题").click()
+        title.fill("周计划")
+        recent.get_by_role("button", name="保存标题").click()
+        expect(page.get_by_role("heading", name="周计划")).to_be_visible()
+        page.reload()
+        expect(page.get_by_role("heading", name="周计划")).to_be_visible()
+
+        page.set_viewport_size({"width": 880, "height": 780})
+        page.get_by_role("button", name="最近对话").click()
+        drawer = page.get_by_role("dialog", name="最近对话")
+        drawer.get_by_role("button", name="删除“周计划”").click()
+        drawer.get_by_role("button", name="取消删除").click()
+        expect(drawer.get_by_text("周计划", exact=True)).to_be_visible()
+        drawer.get_by_role("button", name="删除“周计划”").click()
+        drawer.get_by_role("button", name="确认删除“周计划”").click()
+
+        expect(page.get_by_role("dialog", name="最近对话")).to_have_count(0)
+        expect(page.get_by_role("heading", name="今天，慢慢来")).to_be_visible()
+        with Client(base_url=base_url) as client:
+            assert client.get("/api/conversations/planning").status_code == 404
+        browser.close()
+
+
+def test_recent_conversation_delete_refills_the_limit_and_restores_focus(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        provider=FakeProvider(),
+        conversation_database_path=tmp_path / "mellowday.sqlite3",
+        audit_path=None,
+    )
+
+    with running_server(app) as base_url, sync_playwright() as playwright:
+        with Client(base_url=base_url) as client:
+            for index in range(21):
+                created = client.post(
+                    "/api/chat",
+                    json={
+                        "conversation_id": f"conversation-{index:02d}",
+                        "content": f"Conversation {index:02d}",
+                    },
+                )
+                assert created.status_code == 200
+
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1200, "height": 780})
+        page.goto(f"{base_url}/#/conversation")
+        recent = page.get_by_role("region", name="最近对话")
+        entries = recent.locator(".recent-conversation-item")
+        expect(entries).to_have_count(20)
+
+        deleted = entries.nth(1)
+        deleted.locator(".recent-conversation-actions button").nth(1).click()
+        deleted.locator(".recent-delete-confirm").click()
+
+        expect(entries).to_have_count(20)
+        expect(recent.locator(".recent-conversation-select:focus")).to_have_count(1)
         browser.close()
 
 
@@ -866,7 +954,7 @@ def test_replacement_composer_keeps_drafts_and_respects_keyboard_input(
 
         composer = page.get_by_role("textbox", name="消息")
         recent = page.get_by_role("region", name="最近对话")
-        recent_buttons = recent.get_by_role("button")
+        recent_buttons = recent.locator(".recent-conversation-select")
         expect(recent_buttons).to_have_count(2)
         composer.fill("主会话草稿")
         recent_buttons.first.click()

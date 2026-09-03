@@ -144,6 +144,10 @@ class ConversationResetDecisionBody(ConfirmationDecisionBody):
     confirmation_id: str
 
 
+class ConversationTitleBody(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+
 class ApplicationConfirmationDecisionBody(ConfirmationDecisionBody):
     confirmation_id: str
 
@@ -844,6 +848,18 @@ def create_app(
                 for message in conversation.messages
             ],
         }
+
+    @app.put("/api/conversations/{conversation_id}")
+    async def rename_conversation(
+        conversation_id: str, body: ConversationTitleBody
+    ) -> dict[str, object]:
+        title = body.title.strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="Conversation title is required")
+        conversation = conversation_history.rename(conversation_id, title)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return {"conversation": asdict(conversation)}
 
     @app.post("/api/conversations/{conversation_id}/reset")
     async def reset_conversation(

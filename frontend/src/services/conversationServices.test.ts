@@ -99,6 +99,38 @@ describe("conversation response conversion", () => {
       },
     ]);
   });
+
+  it("persists a trimmed conversation title through the typed service", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const service = new HttpConversationService(async (input, init) => {
+      requests.push({ url: String(input), init });
+      return Response.json({
+        conversation: {
+          conversation_id: "planning",
+          message_count: 2,
+          character_count: 32,
+          created_at: 100,
+          updated_at: 200,
+          title: "周计划",
+          preview: "Plan the week",
+        },
+      });
+    });
+
+    await expect(service.renameConversation("planning", "周计划")).resolves.toMatchObject({
+      conversationId: "planning",
+      title: "周计划",
+    });
+    expect(requests).toEqual([{
+      url: "/api/conversations/planning",
+      init: {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "周计划" }),
+        signal: undefined,
+      },
+    }]);
+  });
 });
 
 describe("confirmation requests", () => {

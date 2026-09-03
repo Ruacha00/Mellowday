@@ -66,6 +66,11 @@ export interface ConversationService {
     conversationId: string,
     signal?: AbortSignal,
   ): Promise<Conversation | null>;
+  renameConversation(
+    conversationId: string,
+    title: string,
+    signal?: AbortSignal,
+  ): Promise<ConversationSummary>;
   sendMessage(
     conversationId: string,
     content: string,
@@ -249,6 +254,22 @@ export class HttpConversationService implements ConversationService {
       summary: convertConversationSummary(payload.conversation),
       messages: payload.messages,
     };
+  }
+
+  async renameConversation(
+    conversationId: string,
+    title: string,
+    signal?: AbortSignal,
+  ): Promise<ConversationSummary> {
+    const payload = await this.requestJson<{
+      conversation: ApiConversationSummary;
+    }>(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+      signal,
+    });
+    return convertConversationSummary(payload.conversation);
   }
 
   async sendMessage(

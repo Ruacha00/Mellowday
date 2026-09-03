@@ -322,10 +322,15 @@ a[href] {
   list-style: none;
 }
 
-.recent-list button {
+.recent-conversation-item {
+  position: relative;
+}
+
+.recent-list .recent-conversation-select {
   display: grid;
   width: 100%;
-  padding: 10px;
+  min-width: 0;
+  padding: 10px 68px 10px 10px;
   gap: 4px;
   border: 1px solid var(--line);
   border-radius: 11px;
@@ -335,10 +340,96 @@ a[href] {
   cursor: pointer;
 }
 
-.recent-list button:hover,
-.recent-list button[aria-current="true"] {
+.recent-list .recent-conversation-select:hover,
+.recent-list .recent-conversation-select[aria-current="true"] {
   border-color: var(--border);
   background: var(--surface-strong);
+}
+
+.recent-conversation-actions {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: flex;
+  gap: 2px;
+}
+
+.recent-conversation-actions button,
+.recent-conversation-editor button,
+.recent-conversation-delete button {
+  min-height: 24px;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.recent-conversation-actions button:hover,
+.recent-conversation-editor button:hover,
+.recent-conversation-delete button:hover {
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 64%, transparent);
+}
+
+.recent-conversation-editor,
+.recent-conversation-delete {
+  display: grid;
+  margin-top: 5px;
+  padding: 8px;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+}
+
+.recent-conversation-editor label {
+  display: grid;
+  gap: 4px;
+}
+
+.recent-conversation-editor label > span,
+.recent-conversation-delete > span {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.recent-conversation-editor input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  background: var(--control);
+}
+
+.recent-conversation-editor > div,
+.recent-conversation-delete > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.recent-conversation-editor button[type="submit"] {
+  color: var(--on-accent);
+  background: var(--accent-strong);
+}
+
+.recent-conversation-delete .recent-delete-confirm {
+  color: #fff;
+  background: var(--danger, #8b3f3f);
+}
+
+.recent-conversation-error {
+  margin: 5px 4px 0;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 10px;
 }
 
 .recent-list strong {

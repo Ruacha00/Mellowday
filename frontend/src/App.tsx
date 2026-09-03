@@ -177,6 +177,42 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
       window.location.hash = "#/conversation";
     }
   }, []);
+  const renameConversation = useCallback(async (
+    summary: ConversationSummary,
+    title: string,
+  ) => {
+    const updated = await services.conversation.renameConversation(
+      summary.conversationId,
+      title,
+    );
+    setConversationSummaries((current) => current.map((item) => (
+      item.conversationId === updated.conversationId ? updated : item
+    )));
+    setConversation((current) => current?.summary.conversationId === updated.conversationId
+      ? { ...current, summary: updated }
+      : current);
+  }, [services.conversation]);
+  const deleteConversation = useCallback(async (summary: ConversationSummary) => {
+    const confirmation = await services.conversation.requestResetConfirmation(
+      summary.conversationId,
+    );
+    const result = await services.conversation.decideReset(confirmation, "accept");
+    if (!result.ok || result.decision !== "accept") {
+      throw new Error("Conversation deletion was not accepted");
+    }
+    const remaining = conversationSummaries.filter(
+      (item) => item.conversationId !== summary.conversationId,
+    );
+    setConversationSummaries(remaining);
+    if (activeConversationIdRef.current === summary.conversationId) {
+      const nextId = remaining[0]?.conversationId ?? "main";
+      activeConversationIdRef.current = nextId;
+      setActiveConversationId(nextId);
+      setConversation(null);
+      setLoadState(remaining.length === 0 ? "ready" : "loading");
+    }
+    refreshConversation(false);
+  }, [conversationSummaries, refreshConversation, services.conversation]);
 
   const announceTurn = (turn: Turn) => {
     if (turn.chatContent.content.length === 0) {
@@ -260,6 +296,8 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
             </div>
             <RecentConversationList
               activeConversationId={activeConversationId}
+              onDelete={deleteConversation}
+              onRename={renameConversation}
               onSelect={selectConversation}
               summaries={conversationSummaries}
             />
@@ -327,6 +365,12 @@ function ApplicationShell({ services = browserApplicationServices }: AppProps) {
         <RecentConversationDrawer
           activeConversationId={activeConversationId}
           onClose={closeRecentDrawer}
+          onDelete={async (summary) => {
+            const deletedActiveConversation = summary.conversationId === activeConversationIdRef.current;
+            await deleteConversation(summary);
+            if (deletedActiveConversation) closeRecentDrawer();
+          }}
+          onRename={renameConversation}
           onSelect={(conversationId) => {
             selectConversation(conversationId);
             closeRecentDrawer();

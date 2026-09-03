@@ -15,7 +15,7 @@ from .events import RuntimeEventLog
 from .types import ChatContent, ChatRole, EventType
 
 
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +25,7 @@ class ConversationSummary:
     character_count: int
     created_at: float
     updated_at: float
+    title: str | None
     preview: str | None
 
 
@@ -136,6 +137,13 @@ class SQLiteConversationHistory:
                     """
                     ALTER TABLE conversation_messages ADD COLUMN source TEXT;
                     PRAGMA user_version = 3;
+                    """
+                )
+            if version < 4:
+                connection.executescript(
+                    """
+                    ALTER TABLE conversations ADD COLUMN title TEXT;
+                    PRAGMA user_version = 4;
                     """
                 )
         self._emit(
@@ -366,6 +374,22 @@ class SQLiteConversationHistory:
         )
         return conversation
 
+    def rename(
+        self, conversation_id: str, title: str
+    ) -> ConversationSummary | None:
+        with self._diagnose("rename", conversation_id=conversation_id):
+            with self._connect() as connection:
+                updated = connection.execute(
+                    "UPDATE conversations SET title = ? WHERE conversation_id = ?",
+                    (title, conversation_id),
+                )
+                if updated.rowcount == 0:
+                    return None
+                rows = self._conversation_summaries(
+                    connection, conversation_id=conversation_id
+                )
+        return self._summary_from_row(rows[0])
+
     def reset(self, conversation_id: str) -> int:
         with self._diagnose("reset", conversation_id=conversation_id):
             with self._connect() as connection:
@@ -404,6 +428,7 @@ class SQLiteConversationHistory:
                     AS character_count,
                 conversations.created_at,
                 conversations.updated_at,
+                conversations.title,
                 (
                     SELECT preview_message.content
                     FROM conversation_messages AS preview_message
@@ -431,6 +456,7 @@ class SQLiteConversationHistory:
             character_count=int(row["character_count"]),
             created_at=float(row["created_at"]),
             updated_at=float(row["updated_at"]),
+            title=None if row["title"] is None else str(row["title"]),
             preview=None if row["preview"] is None else str(row["preview"]),
         )
 
