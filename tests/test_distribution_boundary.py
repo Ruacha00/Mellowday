@@ -139,6 +139,11 @@ def test_distribution_builds_without_the_reference_tree(tmp_path: Path) -> None:
         if line.startswith("Requires-Dist: ")
     ]
     assert all("chatbot" not in requirement for requirement in requirements)
+    assert any(
+        requirement.startswith("tzdata>=2024.1")
+        and 'sys_platform == "win32"' in requirement
+        for requirement in requirements
+    )
     project = tomllib.loads(
         (isolated_project / "pyproject.toml").read_text(encoding="utf-8")
     )
