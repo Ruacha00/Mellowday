@@ -2,10 +2,8 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
-  useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type PropsWithChildren,
@@ -81,91 +79,6 @@ export function AppearanceProvider({ children }: PropsWithChildren) {
     <AppearanceContext.Provider value={value}>
       {children}
     </AppearanceContext.Provider>
-  );
-}
-
-export function AppearancePopover() {
-  const { appearance } = useAppearance();
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const closeButton = useRef<HTMLButtonElement>(null);
-  const label = themeDefinitions[appearance.theme].label;
-
-  const close = useCallback((restoreFocus: boolean) => {
-    setOpen(false);
-    if (restoreFocus) {
-      window.requestAnimationFrame(() => trigger.current?.focus());
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    window.requestAnimationFrame(() => closeButton.current?.focus());
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        close(true);
-      }
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Node && !container.current?.contains(event.target)) {
-        close(true);
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [close, open]);
-
-  return (
-    <div className="appearance-popover-anchor" ref={container}>
-      <button
-        aria-controls="appearance-popover"
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-label={`外观，当前主题：${label}`}
-        className="appearance-trigger"
-        onClick={() => setOpen((current) => !current)}
-        ref={trigger}
-        type="button"
-      >
-        <span aria-hidden="true">◉</span>
-        <span><small>外观</small><strong>{label}</strong></span>
-        <span aria-hidden="true">⌄</span>
-      </button>
-      {open ? (
-        <section
-          aria-labelledby="appearance-popover-title"
-          aria-modal="false"
-          className="appearance-popover"
-          id="appearance-popover"
-          role="dialog"
-        >
-          <header>
-            <div>
-              <small>Appearance</small>
-              <h2 id="appearance-popover-title">外观</h2>
-            </div>
-            <button
-              aria-label="关闭外观面板"
-              className="appearance-close"
-              onClick={() => close(true)}
-              ref={closeButton}
-              type="button"
-            >
-              <span aria-hidden="true">×</span>
-            </button>
-          </header>
-          <AppearanceControls />
-        </section>
-      ) : null}
-    </div>
   );
 }
 

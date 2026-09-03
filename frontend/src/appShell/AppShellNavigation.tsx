@@ -1,6 +1,6 @@
 import { lazy, Suspense, type RefObject } from "react";
 
-import { AppearanceControls, AppearancePopover } from "../appearance/Appearance";
+import { AppearanceControls } from "../appearance/Appearance";
 import { LifeCalendarPage } from "../life/LifeCalendarPage";
 import { LifeNotesPage } from "../life/LifeNotesPage";
 import { LifeRemindersPage } from "../life/LifeRemindersPage";
@@ -105,26 +105,27 @@ export function PageHeading({
   route: AppRoute;
 }) {
   const page = pageDetails(route);
+  if (route.area === "conversation") {
+    return (
+      <header className="page-heading page-heading-conversation">
+        <button
+          aria-haspopup="dialog"
+          className="recent-drawer-trigger"
+          onClick={onOpenRecent}
+          ref={recentTriggerRef}
+          type="button"
+        >
+          最近对话
+        </button>
+      </header>
+    );
+  }
   return (
     <header className="page-heading">
       <div>
         <p className="page-kicker">{page.kicker}</p>
         <h1 tabIndex={-1}>{page.title}</h1>
         <p>{page.note}</p>
-      </div>
-      <div className="page-actions">
-        {route.area === "conversation" ? (
-          <button
-            aria-haspopup="dialog"
-            className="recent-drawer-trigger"
-            onClick={onOpenRecent}
-            ref={recentTriggerRef}
-            type="button"
-          >
-            最近对话
-          </button>
-        ) : null}
-        <AppearancePopover />
       </div>
     </header>
   );

@@ -76,7 +76,8 @@ def test_react_replacement_renders_from_the_python_static_host(
 
         expect(
             page.get_by_role("heading", name="我在这里，陪你梳理今天。")
-        ).to_be_visible()
+        ).to_have_count(0)
+        expect(page.get_by_role("heading", name="今天，慢慢来")).to_be_visible()
         expect(
             page.get_by_text("已加载存储会话。", exact=True)
         ).to_be_visible()
@@ -140,28 +141,18 @@ def test_replacement_appearance_popover_and_settings_share_persisted_state(
     with running_server(app) as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1200, "height": 780})
-        page.goto(f"{base_url}/")
+        page.goto(f"{base_url}/#/conversation")
 
         expect(page.locator("html")).to_have_attribute("data-theme", "sky")
-        trigger = page.get_by_role("button", name="外观，当前主题：晴空")
-        trigger.click()
-        popover = page.get_by_role("dialog", name="外观")
-        expect(popover).to_have_attribute("aria-modal", "false")
-        expect(popover).to_be_visible()
-
-        popover.get_by_role("radio", name="简约").click()
-        popover.get_by_role("slider", name="强调色色相").fill("286")
-        popover.get_by_role("slider", name="背景亮度").fill("91")
-        expect(page.locator("html")).to_have_attribute("data-theme", "minimal")
-        expect(page.locator("[data-theme-decoration]")).to_have_count(0)
-
-        page.keyboard.press("Escape")
-        expect(popover).not_to_be_visible()
-        expect(
-            page.get_by_role("button", name="外观，当前主题：简约")
-        ).to_be_focused()
+        expect(page.get_by_role("button", name="外观，当前主题：晴空")).to_have_count(0)
         page.get_by_role("link", name="设置", exact=True).click()
         appearance_page = page.get_by_label("外观设置")
+
+        appearance_page.get_by_role("radio", name="简约").click()
+        appearance_page.get_by_role("slider", name="强调色色相").fill("286")
+        appearance_page.get_by_role("slider", name="背景亮度").fill("91")
+        expect(page.locator("html")).to_have_attribute("data-theme", "minimal")
+        expect(page.locator("[data-theme-decoration]")).to_have_count(0)
         expect(appearance_page.get_by_role("radio", name="简约")).to_have_attribute(
             "aria-checked", "true"
         )
@@ -191,21 +182,18 @@ def test_replacement_appearance_popover_meets_keyboard_and_sizing_contract(
     with running_server(app) as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 520, "height": 640})
-        page.goto(f"{base_url}/")
+        page.goto(f"{base_url}/#/settings/appearance")
 
-        trigger = page.get_by_role("button", name="外观，当前主题：晴空")
-        trigger.focus()
-        page.keyboard.press("Enter")
-        popover = page.get_by_role("dialog", name="外观")
-        box = popover.bounding_box()
+        appearance_page = page.get_by_label("外观设置")
+        box = appearance_page.bounding_box()
         assert box is not None
-        assert box["width"] >= 480
-        assert box["x"] >= 17
-        assert box["x"] + box["width"] <= 503
+        assert box["width"] <= 496
+        assert box["x"] >= 12
+        assert box["x"] + box["width"] <= 508
 
-        sky = popover.get_by_role("radio", name="晴空")
-        sakura = popover.get_by_role("radio", name="樱粉")
-        minimal = popover.get_by_role("radio", name="简约")
+        sky = appearance_page.get_by_role("radio", name="晴空")
+        sakura = appearance_page.get_by_role("radio", name="樱粉")
+        minimal = appearance_page.get_by_role("radio", name="简约")
         expect(sky).to_have_attribute("tabindex", "0")
         expect(sakura).to_have_attribute("tabindex", "-1")
         sky.focus()
@@ -219,19 +207,10 @@ def test_replacement_appearance_popover_meets_keyboard_and_sizing_contract(
         expect(sky).to_be_focused()
         expect(page.locator("html")).to_have_attribute("data-theme", "sky")
 
-        page.keyboard.press("Escape")
-        expect(popover).not_to_be_visible()
-        expect(trigger).to_be_focused()
-
-        trigger.click()
-        page.mouse.click(4, 300)
-        expect(popover).not_to_be_visible()
-        expect(trigger).to_be_focused()
-
-        trigger.focus()
-        page.keyboard.press("Enter")
-        popover.get_by_role("radio", name="夜色").focus()
-        page.keyboard.press("Enter")
+        night = appearance_page.get_by_role("radio", name="夜色")
+        night.focus()
+        expect(night).to_be_focused()
+        night.press("Enter")
         expect(page.locator("html")).to_have_attribute("data-theme", "night")
         browser.close()
 
@@ -329,8 +308,6 @@ def test_replacement_themes_preserve_content_geometry_with_reduced_motion(
         )
         assert baseline_box is not None
 
-        page.get_by_role("button", name="外观，当前主题：晴空").click()
-        popover = page.get_by_role("dialog", name="外观")
         for theme, label in (
             ("sky", "晴空"),
             ("sakura", "樱粉"),
@@ -338,20 +315,12 @@ def test_replacement_themes_preserve_content_geometry_with_reduced_motion(
             ("night", "夜色"),
             ("minimal", "简约"),
         ):
-            popover.get_by_role("radio", name=label).click()
+            page.goto(f"{base_url}/#/settings/appearance")
+            appearance_page = page.get_by_label("外观设置")
+            appearance_page.get_by_role("radio", name=label).click()
             expect(page.locator("html")).to_have_attribute("data-theme", theme)
-            current_box = workspace.bounding_box()
-            assert current_box is not None
-            for dimension in ("x", "y", "width", "height"):
-                assert abs(current_box[dimension] - baseline_box[dimension]) <= 1
-            assert page.locator(".message p").first.evaluate(
-                """element => {
-                  const style = getComputedStyle(element);
-                  return [style.fontFamily, style.fontSize, style.lineHeight];
-                }"""
-            ) == baseline_type
-            control_contrasts = page.locator(
-                ".appearance-trigger, .theme-option[aria-checked='false']"
+            control_contrasts = appearance_page.locator(
+                ".theme-option[aria-checked='false']"
             ).evaluate_all(
                 """elements => {
                   const canvas = document.createElement('canvas');
@@ -383,6 +352,20 @@ def test_replacement_themes_preserve_content_geometry_with_reduced_motion(
             )
             assert control_contrasts
             assert min(control_contrasts) >= 3
+
+            page.goto(f"{base_url}/#/conversation")
+            page.reload()
+            expect(page.get_by_role("heading", name="Geometry fixture")).to_be_visible()
+            current_box = workspace.bounding_box()
+            assert current_box is not None
+            for dimension in ("x", "y", "width", "height"):
+                assert abs(current_box[dimension] - baseline_box[dimension]) <= 1
+            assert page.locator(".message p").first.evaluate(
+                """element => {
+                  const style = getComputedStyle(element);
+                  return [style.fontFamily, style.fontSize, style.lineHeight];
+                }"""
+            ) == baseline_type
             assert page.evaluate(
                 "document.documentElement.scrollWidth <= "
                 "document.documentElement.clientWidth"
