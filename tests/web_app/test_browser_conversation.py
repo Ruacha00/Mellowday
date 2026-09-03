@@ -889,7 +889,7 @@ def test_replacement_proactive_chat_survives_route_changes_once(
             )
         assert saved.status_code == 200
 
-        announcer = page.locator('[aria-live="polite"]')
+        announcer = page.get_by_role("status")
         expect(announcer).to_have_text(
             "主动聊天：A gentle local check-in.", timeout=5_000
         )
