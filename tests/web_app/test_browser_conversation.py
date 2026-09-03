@@ -873,7 +873,11 @@ def test_replacement_proactive_chat_survives_route_changes_once(
             if "/api/conversations/main/live" in request.url
             else None,
         )
-        page.goto(f"{base_url}/#/today")
+        with page.expect_response(
+            lambda response: response.status == 200
+            and "/api/conversations/main/live" in response.url
+        ):
+            page.goto(f"{base_url}/#/today")
 
         with Client(base_url=base_url) as client:
             saved = client.put(

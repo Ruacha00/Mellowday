@@ -114,7 +114,11 @@ def test_replacement_history_reset_and_operation_records_are_route_owned(
             ).to_be_visible()
             expect(page.get_by_text("正在加载对话历史…", exact=True)).to_be_visible()
             assert delayed_history
-            delayed_history[0].continue_()
+            with page.expect_response(
+                lambda response: response.url
+                == f"{base_url}/api/conversations"
+            ):
+                delayed_history[0].continue_()
             page.unroute("**/api/conversations", delay_history)
             history_item = page.locator(".history-list-item").filter(
                 has_text="A stored transcript"
