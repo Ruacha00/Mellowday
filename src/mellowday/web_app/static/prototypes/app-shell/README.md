@@ -24,6 +24,6 @@ With the server already running, reproduce the final browser matrix with:
 python src/mellowday/web_app/static/prototypes/app-shell/final_validation.py
 ```
 
-The verdict and screenshots are in `docs/prototype/mellowday-ui-final-validation-verdict-handoff.md` and `docs/prototype/screenshots/app-shell-final/`.
+Validation output is kept locally and ignored by Git.
 
 This directory is a throwaway prototype, not production UI or packaged static content.

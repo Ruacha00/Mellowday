@@ -1,3 +1,0 @@
-# Use portable application-managed Provider key encryption
-
-Mellowday encrypts Provider API keys before local persistence using application-managed random key material, with no master password and no Windows user or device binding. Portable data and backups include the material needed by Mellowday to decrypt those credentials on another machine. This deliberately prioritizes transparent use and portability: it prevents direct plaintext inspection of SQLite and backup contents, but it does not claim protection against an attacker who possesses the complete application and data or reverse-engineers the application.

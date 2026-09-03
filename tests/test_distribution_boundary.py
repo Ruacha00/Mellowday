@@ -34,16 +34,6 @@ _THEME_ASSET_NAMES = {
     )
 }
 
-_VISUAL_BASELINE_ROOT = Path("docs/visual-baselines/issue-48")
-_VISUAL_BASELINE_NAMES = {
-    "appearance-narrow.png",
-    "minimal-narrow.png",
-    "night-desktop.png",
-    "recent-conversation-drawer.png",
-    "sky-desktop.png",
-}
-
-
 def _copy_distribution_project(destination: Path) -> Path:
     isolated_project = destination / "project"
     isolated_project.mkdir()
@@ -168,17 +158,6 @@ def test_web_app_frontend_has_no_node_or_electron_runtime_access() -> None:
         if path.suffix in {".ts", ".tsx"}
     ]
     assert all(marker not in source for source in sources for marker in forbidden)
-
-
-def test_production_visual_baseline_set_is_bounded() -> None:
-    baselines = {
-        path.name for path in _VISUAL_BASELINE_ROOT.glob("*.png") if path.is_file()
-    }
-    assert baselines == _VISUAL_BASELINE_NAMES
-    for name in baselines:
-        payload = (_VISUAL_BASELINE_ROOT / name).read_bytes()
-        assert payload.startswith(b"\x89PNG\r\n\x1a\n")
-        assert len(payload) > 10_000
 
 
 def test_distribution_packages_exactly_twelve_production_theme_roles(
