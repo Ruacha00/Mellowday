@@ -8,6 +8,20 @@ import {
 import { MarkdownContent } from "./MarkdownContent";
 
 describe("conversation content", () => {
+  it("does not render an inert attachment affordance in the text-only composer", () => {
+    const markup = renderToStaticMarkup(
+      <ConversationSurface
+        conversationId="main"
+        conversationTitle="New conversation"
+        entries={[]}
+        loadState="ready"
+      />,
+    );
+
+    expect(markup).not.toContain("composer-mark");
+    expect(markup).not.toContain("＋");
+  });
+
   it("renders common Markdown and selectable code as semantic content", () => {
     const markup = renderToStaticMarkup(
       <MarkdownContent

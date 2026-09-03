@@ -193,7 +193,6 @@ function ConversationComposer({
 
   return (
     <form aria-label="消息编辑器" className="composer" onSubmit={submit}>
-      <span aria-hidden="true" className="composer-mark">＋</span>
       <textarea
         aria-label="消息"
         onChange={(event) => onChange(event.currentTarget.value)}

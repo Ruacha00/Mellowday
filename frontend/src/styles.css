@@ -913,7 +913,7 @@ a[href] {
   position: sticky;
   bottom: 0;
   display: grid;
-  grid-template-columns: 38px 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
   min-height: 62px;
   padding: 8px 10px;
@@ -925,19 +925,13 @@ a[href] {
   backdrop-filter: blur(18px);
 }
 
-.composer-mark {
-  color: var(--accent-strong);
-  font-size: 25px;
-  text-align: center;
-}
-
 .composer textarea {
   field-sizing: content;
   width: 100%;
   min-height: 42px;
   max-height: calc(1.65em * 8 + 20px);
   padding: 10px 13px;
-  border-left: 1px solid var(--line);
+  border-left: 0;
   border-top: 0;
   border-right: 0;
   border-bottom: 0;
