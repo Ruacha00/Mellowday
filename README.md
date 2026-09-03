@@ -1,10 +1,14 @@
 # Mellowday
 
+[![release](https://github.com/Ruacha00/mellowday/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Ruacha00/mellowday/actions/workflows/release.yml)
+
 > 慢慢过日子，也好好记得你。
 
 Mellowday（悠日）是一位本地优先、自行部署的个人日常助手。她既陪你聊天，也帮你照看生活里的任务、提醒、日程、笔记和那些值得记住的小事。
 
 仓库包含可独立安装和运行的完整产品：浏览器 Conversation Surface 与集成的 Settings、可替换的模型 Provider、本地持久化的 Persona、Memory、Conversation History 和 Life Records、Daily Review，以及受限且只读的 Proactive Chat。Web App 通过公共 Agent Core facade 驱动对话和扩展能力；管理界面、诊断与审计保持中性、精确。产品边界和关键决策见 [Mellowday Product Direction](docs/product-direction.md)。
+
+架构权衡、可验证的工程边界、界面截图和面试演示路线见 [项目展示与架构说明](docs/portfolio.md)。
 
 ## 当前交付状态
 
@@ -84,3 +88,10 @@ frontend development server. The production FastAPI root serves the generated
 React application; the former `/replacement` entry redirects to `/`.
 
 测试覆盖两个已确认的公共边界：Agent Core facade，以及包含 API 和真实浏览器旅程的完整 Web App 边界。隔离构建测试会在不复制 `chatbot/` 参考树的临时项目中生成 wheel，并检查运行时包不包含对该目录的导入。
+
+## License and assets
+
+Mellowday code and project-specific visual assets are available under the
+[MIT License](LICENSE). Third-party asset provenance and license exceptions are
+recorded in [Asset sources and licenses](ASSET_SOURCES.md); the bundled Inter
+font remains under the SIL Open Font License 1.1.

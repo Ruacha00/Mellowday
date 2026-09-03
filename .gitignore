@@ -20,4 +20,5 @@ dist/
 node_modules/
 /.scratch/
 开发路径.md
+repomix-output.xml
 

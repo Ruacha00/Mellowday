@@ -8,6 +8,7 @@ name = "mellowday"
 version = "0.1.0"
 description = "A self-hosted personal daily assistant"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.110,<1.0",
