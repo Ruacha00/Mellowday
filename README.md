@@ -1,6 +1,7 @@
 # Mellowday
 
 [![Release checks](https://github.com/Ruacha00/mellowday/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Ruacha00/mellowday/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/Ruacha00/mellowday?display_name=tag&sort=semver)](https://github.com/Ruacha00/mellowday/releases/latest)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > 慢慢过日子，也好好记得你。
