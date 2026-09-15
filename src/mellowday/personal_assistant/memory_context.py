@@ -44,6 +44,8 @@ _GENERIC_TERMS = frozenset(
         "would",
         "work",
         "your",
+        "喜欢", "偏好", "习惯", "我的", "我喜", "我不", "我平", "平时", "一直",
+        "什么", "怎么", "如何", "应该", "帮我", "适合", "现在", "通常", "一个",
     }
 )
 _CONCEPTS = {
@@ -60,14 +62,19 @@ _CONCEPTS = {
             "python",
             "rust",
             "typescript",
+            "代码", "编程", "语言", "开发",
         }
     ),
     "air_travel_seat": frozenset(
-        {"aisle", "flight", "flying", "plane", "seat", "seats", "window"}
+        {"aisle", "flight", "flying", "plane", "seat", "seats", "window",
+         "飞机", "机舱", "座位", "选座", "靠窗", "过道"}
     ),
     "food": frozenset(
-        {"allergy", "cilantro", "dinner", "eat", "food", "meal", "restaurant"}
+        {"allergy", "cilantro", "dinner", "eat", "food", "meal", "restaurant",
+         "晚餐", "晚饭", "午餐", "早餐", "吃饭", "餐厅", "香菜", "花生", "饮食"}
     ),
+    "coffee": frozenset({"coffee", "sugar", "咖啡", "无糖", "加糖", "甜度"}),
+    "response_style": frozenset({"replies", "reply", "concise", "detailed", "回复", "回答", "篇幅", "简短", "详细"}),
 }
 
 
@@ -124,9 +131,17 @@ class AssistantContextAssembler:
 
 
 def _terms(value: str) -> frozenset[str]:
+    # Han text has no spaces; whole-sentence tokens cannot match paraphrases.
+    # Bigrams keep this a small local retriever; domain concepts remain explicit.
+    candidates = re.findall(r"[a-z0-9_]+", value.casefold())
+    # Break at whole generic expressions before n-gram generation, otherwise
+    # e.g. “一直喜欢” leaves “直喜” to match unrelated interests.
+    han_value = re.sub(r"我(?:一直|平时|通常|一向|长期)?(?:喜欢|偏好|习惯|不喜欢)|我的|帮我|适合我", " ", value)
+    for segment in re.findall(r"[\u3400-\u9fff]+", han_value):
+        candidates.extend(segment[i:i + 2] for i in range(len(segment) - 1))
     return frozenset(
         term
-        for term in re.findall(r"[\w]+", value.casefold())
+        for term in candidates
         if len(term) > 1 and term not in _GENERIC_TERMS
     )
 

@@ -54,17 +54,20 @@ def build_memory_tools(service: SQLiteMemoryService) -> tuple[Tool, ...]:
             name="memory_remember",
             description=(
                 "Save durable User information only when the User explicitly asks "
-                "the Assistant to remember it."
+                "the Assistant to remember it. The evidence argument must copy the "
+                "entire original User message verbatim, in its original language. "
+                "The content must quote the durable fact from that message; never "
+                "translate, paraphrase, or drop a negation or temporary qualifier."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "content": {"type": "string", "minLength": 1},
+                    "content": {"type": "string", "minLength": 1, "description": "Exact continuous quote from evidence. Preserve I/我, original language and qualifiers; do not replace with User/用户. Example evidence: 记住，我喜欢靠窗。 content: 我喜欢靠窗。"},
                     "kind": {
                         "type": "string",
                         "enum": ["preference", "fact", "important"],
                     },
-                    "evidence": {"type": "string", "minLength": 1},
+                    "evidence": {"type": "string", "minLength": 1, "description": "The complete original User message, copied character for character, including punctuation. Never translate or shorten."},
                 },
                 "required": ["content", "kind", "evidence"],
                 "additionalProperties": False,
@@ -79,17 +82,19 @@ def build_memory_tools(service: SQLiteMemoryService) -> tuple[Tool, ...]:
             description=(
                 "Conservatively save a stable User preference or fact only when "
                 "content is directly supported by a quoted User message. Never save "
-                "temporary emotion, jokes, or inference."
+                "temporary emotion, jokes, or inference. Copy the entire original "
+                "User message verbatim into evidence, in its original language. "
+                "Quote content directly from that message without translation or paraphrase."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "content": {"type": "string", "minLength": 1},
+                    "content": {"type": "string", "minLength": 1, "description": "Exact continuous quote from evidence. Preserve I/我, original language and qualifiers; do not replace with User/用户. Example: evidence and content are both 我一直喜欢无糖咖啡。"},
                     "kind": {
                         "type": "string",
                         "enum": ["preference", "fact"],
                     },
-                    "evidence": {"type": "string", "minLength": 1},
+                    "evidence": {"type": "string", "minLength": 1, "description": "The complete original User message, copied character for character, including punctuation. Never translate or shorten."},
                 },
                 "required": ["content", "kind", "evidence"],
                 "additionalProperties": False,

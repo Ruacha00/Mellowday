@@ -28,4 +28,8 @@ node_modules/
 /.scratch/
 开发路径.md
 repomix-output.xml
+# Local evaluation code, test cases, and generated evidence.
+/evals/
+/tests/evals/
+/tests/personal_assistant/test_memory_language.py
 
