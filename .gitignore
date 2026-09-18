@@ -1,35 +1,38 @@
-# Read-only reference project; never track or upload.
-/chatbot/
+# Local development records and credentials
+.local-planning/
+.env
+.env.*
+!.env.example
+*.pem
 
-# Local vibe-coding control documents; never track or upload.
-/docs/
-/AGENTS.md
-/CLAUDE.md
-/CONTEXT.md
-/.claude/
-
-# Local installation configuration and User-owned data.
-/.env
-/.env.*
-/data/
-/backups/
-.gitnexus
-
+# Environments and caches
+.venv/
+venv/
 __pycache__/
 *.py[cod]
-*.egg-info/
-.mypy_cache/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .pytest-tmp/
-.venv/
+.coverage
+htmlcov/
+node_modules/
+.gitnexus/
+.idea/
+.vscode/
+
+# Generated artifacts and personal state
 build/
 dist/
-node_modules/
-/.scratch/
-开发路径.md
-repomix-output.xml
-# Local evaluation code, test cases, and generated evidence.
-/evals/
-/tests/evals/
-/tests/personal_assistant/test_memory_language.py
-
+*.egg-info/
+data/
+output/
+.scratch/
+*.log
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+playwright-report/
+test-results/
+evals/reports/

@@ -1,7 +1,0 @@
-"""Run the self-hosted application with ``python -m mellowday``."""
-
-from mellowday.web_app.__main__ import main
-
-
-if __name__ == "__main__":
-    main()
