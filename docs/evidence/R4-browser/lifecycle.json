@@ -1,0 +1,124 @@
+{
+  "health": {
+    "ok": true,
+    "app": "mellowday",
+    "version": "0.1.0",
+    "model_configured": true
+  },
+  "disconnect": {
+    "frames_before_disconnect": 3,
+    "seconds_before_disconnect": 2.7,
+    "second_turn_status": 200
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "第一轮"
+    },
+    {
+      "role": "assistant",
+      "content": "回"
+    },
+    {
+      "role": "user",
+      "content": "第二轮"
+    },
+    {
+      "role": "assistant",
+      "content": "回复2号：内容内容内容内"
+    }
+  ],
+  "model_calls": [
+    {
+      "n": 1,
+      "model": "smoke-model-1",
+      "messages": 2,
+      "last_user": "第一轮",
+      "chunks_written": 3,
+      "overlap_at_start": 0
+    },
+    {
+      "n": 2,
+      "model": "smoke-model-1",
+      "messages": 3,
+      "last_user": "第二轮",
+      "chunks_written": 21,
+      "overlap_at_start": 1
+    }
+  ],
+  "config_saved": {
+    "api_base": "http://127.0.0.1:58615/v1",
+    "model": "smoke-model-2",
+    "thinking": false,
+    "max_turns": null,
+    "configured": true,
+    "api_key_hint": ""
+  },
+  "models_used": [
+    "smoke-model-1",
+    "smoke-model-1",
+    "smoke-model-2",
+    "smoke-model-2"
+  ],
+  "messages_per_call": [
+    2,
+    3,
+    5,
+    2
+  ],
+  "history_after_config": 6,
+  "conversation_after_config": {
+    "n": 3,
+    "model": "smoke-model-2",
+    "messages": 5,
+    "last_user": "第三轮",
+    "user_messages": [
+      "第一轮",
+      "第二轮",
+      "第三轮"
+    ],
+    "start": 1789787421.1373367,
+    "last_write": 1789787423.1468494,
+    "peer_closed": 1789787423.2470644,
+    "chunks": 21,
+    "end": 1789787423.2470644,
+    "overlap_at_start": 0
+  },
+  "invalid_id": {
+    "status": 400,
+    "body": {
+      "detail": "invalid session id: only [A-Za-z0-9_-]{1,64} is allowed"
+    }
+  },
+  "delete": {
+    "status": 200,
+    "files_before": [
+      "smoke1.history.json",
+      "smoke1.json",
+      "smoke1.trace.jsonl"
+    ],
+    "files_after": [],
+    "get_after_delete": 404,
+    "delete_again": 404,
+    "listed_after": []
+  },
+  "checks": {
+    "server_is_up": true,
+    "model_configured": true,
+    "history_is_ordered": true,
+    "one_reply_per_turn": true,
+    "first_reply_is_the_partial_one": true,
+    "second_reply_is_complete": true,
+    "turn1_model_stopped_early": true,
+    "turn2_model_completed": true,
+    "second_turn_saw_the_first_message": true,
+    "saved_config_has_no_key": true,
+    "next_turn_uses_the_saved_model": true,
+    "history_survives_the_config_change": true,
+    "invalid_id_is_400": true,
+    "delete_removed_every_file": true,
+    "deleted_session_is_gone": true,
+    "delete_is_idempotent": true,
+    "deleted_session_is_unlisted": true
+  }
+}

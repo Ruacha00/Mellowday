@@ -1,0 +1,11 @@
+{
+  "checks": {
+    "next_page_appends_the_original": true,
+    "collapse_hides_original": true,
+    "reopen_preserves_loaded_pages": true,
+    "all_pages_equal_saved_original": true,
+    "end_of_content_is_visible": true,
+    "no_javascript_errors": true
+  },
+  "errors": []
+}

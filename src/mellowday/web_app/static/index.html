@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MellowDay</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot"></span> MellowDay</div>
+    <nav class="nav">
+      <button class="nav-item active" data-view="chat">对话</button>
+      <button class="nav-item" data-view="todos">待办</button>
+      <button class="nav-item" data-view="calendar">日历</button>
+      <button class="nav-item" data-view="reminders">提醒</button>
+      <button class="nav-item" data-view="notes">笔记</button>
+      <button class="nav-item" data-view="memories">记忆</button>
+      <button class="nav-item" data-view="skills">习惯</button>
+      <button class="nav-item" data-view="settings">设置</button>
+    </nav>
+    <div class="session-block">
+      <div class="session-head"><span>历史会话</span><button id="new-session" title="新建会话">＋</button></div>
+      <ul id="session-list" class="session-list"></ul>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section class="view active" id="view-chat">
+      <header class="view-head">
+        <div>
+          <h1>对话</h1>
+          <p class="muted" id="chat-status">正在检查模型配置…</p>
+        </div>
+        <button id="abort" class="ghost" hidden>停止</button>
+      </header>
+      <div class="messages" id="messages"></div>
+      <form class="composer" id="composer">
+        <textarea id="input" rows="1" placeholder="例如：帮我看看明天有什么安排，然后安排三个重点任务"></textarea>
+        <button type="submit" id="send">发送</button>
+      </form>
+    </section>
+
+    <section class="view" id="view-records">
+      <header class="view-head">
+        <h1 id="records-title">记录</h1>
+        <form class="inline-form" id="record-form">
+          <input id="record-title" placeholder="标题" required />
+          <input id="record-detail" placeholder="备注（可选）" />
+          <input id="record-due" type="datetime-local" />
+          <button type="submit">新建</button>
+        </form>
+      </header>
+      <div class="table-wrap"><table id="records-table"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="view" id="view-skills">
+      <header class="view-head">
+        <div>
+          <h1>习惯</h1>
+          <p class="muted">这些是从你的反馈里学到的习惯规则：停用后不再影响新的对话，随时可以恢复；回退版本会让它改按旧版本执行。</p>
+        </div>
+        <button id="skills-reload" class="ghost" type="button">刷新</button>
+      </header>
+      <div id="skills-notice" class="skills-notice" role="status"></div>
+      <div id="skills-list" class="skills-list"></div>
+    </section>
+
+    <section class="view" id="view-settings">
+      <header class="view-head"><h1>设置</h1></header>
+      <form class="settings-form" id="settings-form">
+        <label>模型
+          <input id="cfg-model" list="cfg-model-options" autocomplete="off"
+                 placeholder="deepseek-v4-pro" />
+          <datalist id="cfg-model-options">
+            <option value="deepseek-v4-pro"></option>
+            <option value="deepseek-flash"></option>
+            <option value="deepseek-chat"></option>
+            <option value="deepseek-reasoner"></option>
+            <option value="gpt-4o-mini"></option>
+            <option value="qwen-plus"></option>
+          </datalist>
+        </label>
+        <label>接口地址<input id="cfg-base" placeholder="https://api.deepseek.com/v1" /></label>
+        <label>API Key<input id="cfg-key" type="password" placeholder="留空表示不修改" /></label>
+        <label>最大回合数<input id="cfg-turns" type="number" min="1" placeholder="默认不限制" /></label>
+        <div class="row"><button type="submit">保存</button><span id="settings-status" class="muted"></span></div>
+        <p class="muted">保存后对下一次对话生效；正在进行的这一轮仍使用旧设置。密钥只用于接口调用，不会回显。</p>
+      </form>
+    </section>
+  </main>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

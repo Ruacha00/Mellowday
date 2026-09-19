@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mellowday"
+version = "0.1.0"
+description = "MellowDay personal assistant runtime"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.0.0",
+    "anthropic>=0.25.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "anyio>=4.0", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# The browser client is plain files inside the package, not a Python subpackage.
+# Without this they are omitted from the wheel and an installed deployment starts
+# up healthy but serves no interface at all.
+[tool.setuptools.package-data]
+mellowday = ["web_app/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["anyio: async test executed by the anyio plugin"]

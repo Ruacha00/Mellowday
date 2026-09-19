@@ -1,0 +1,49 @@
+# Docker Compose deployment for MellowDay.
+#
+#   cp .env.docker.example .env      # then fill in MELLOWDAY_API_KEY
+#   docker compose up -d --build
+#   open http://127.0.0.1:8021
+#
+# The service is reachable on the loopback interface only. Nothing here embeds a
+# credential: the key travels from the host environment/.env into the running
+# container and is never part of an image layer.
+name: mellowday
+
+services:
+  web:
+    build:
+      context: .
+      target: production
+    image: mellowday:local
+    # Optional: a missing .env is not an error, an unconfigured model still
+    # serves the management page and answers chat with a clear config error.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Explicitly forwarded so the container's configuration is readable here
+      # instead of being an invisible side effect of env_file.
+      MELLOWDAY_API_KEY: ${MELLOWDAY_API_KEY:-}
+      MELLOWDAY_API_BASE: ${MELLOWDAY_API_BASE:-}
+      MELLOWDAY_MODEL: ${MELLOWDAY_MODEL:-}
+      # Always the in-container path. The host .env points MELLOWDAY_DATA_DIR at
+      # the developer's Windows directory; "environment" wins over "env_file",
+      # so the container can never write there.
+      MELLOWDAY_DATA_DIR: /app/data
+      # Credentials come from the environment above, never from a file on disk.
+      # Empty disables mellowday.env's .env lookup (see src/mellowday/env.py).
+      MELLOWDAY_ENV_FILE: ""
+      # The assistant resolves relative times such as 明天上午九点 against its own clock
+      # and stores the result with that offset. Left at the image default of UTC,
+      # such a request is stored as 09:00Z and the browser then renders it as
+      # 17:00 for a reader in UTC+8. Override with TZ=... for another zone.
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      # Loopback only: the app has no authentication of its own.
+      - "127.0.0.1:${MELLOWDAY_WEB_PORT:-8021}:8000"
+    volumes:
+      - mellowday-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  mellowday-data:

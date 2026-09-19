@@ -1,0 +1,228 @@
+{
+  "image": "mellowday:acceptance-r4",
+  "container": "mellowday-acceptance-2924d269",
+  "volume": "mellowday-acceptance-2924d269-data",
+  "checks": {
+    "container_healthy": true,
+    "nonroot_runtime": true,
+    "local_timezone": true,
+    "installed_package": true,
+    "image_contains_no_environment_file": true,
+    "model_configured": true,
+    "serves_/": true,
+    "serves_/app.js": true,
+    "serves_/styles.css": true,
+    "real_model_tool_call": true,
+    "stream_has_reply_and_done": true,
+    "chat_has_no_error": true,
+    "one_record_created": true,
+    "relative_time_matches_local_clock": true,
+    "healthy_after_restart": true,
+    "volume_preserves_record": true,
+    "session_survives_restart": true
+  },
+  "engine_version": "29.6.2",
+  "image_id": "sha256:d832540bd8249f1b423cb4c6f2515517be8307affbd1a10ef5e5f7f28b09aed3",
+  "base_url": "http://127.0.0.1:51663",
+  "runtime": {
+    "uid": 1000,
+    "offset": 28800.0,
+    "package": "/usr/local/lib/python3.12/site-packages/mellowday/__init__.py"
+  },
+  "events": [
+    {
+      "type": "session",
+      "session_id": "container-acceptance"
+    },
+    {
+      "type": "busy_start",
+      "label": "Thinking"
+    },
+    {
+      "type": "busy_end"
+    },
+    {
+      "type": "tool_start",
+      "name": "create_todo",
+      "arguments": {
+        "title": "容器验收-2924d269",
+        "due_at": "2026-09-20T09:00:00+08:00"
+      }
+    },
+    {
+      "type": "tool_result",
+      "name": "create_todo",
+      "result": "{\"ok\": true, \"id\": \"05f6deed7a9b477da01848684e4eb43e\", \"operation_id\": \"op_38edb12b2daa4dd3922e1f23c0854e63\", \"record\": {\"id\": \"05f6deed7a9b477da01848684e4eb43e\", \"kind\": \"todos\", \"title\": \"容器验收-2924d269\", \"detail\": null, \"due_at\": \"2026-09-20T01:00:00+00:00\", \"status\": \"open\", \"created_at\": \"2026-09-19T03:33:44.598493+00:00\", \"updated_at\": \"2026-09-19T03:33:44.598493+00:00\", \"source\": null, \"meta\": {}, \"due_at_local\": \"2026-09-20T09:00:00+08:00\"}}"
+    },
+    {
+      "type": "busy_start",
+      "label": "Thinking"
+    },
+    {
+      "type": "busy_end"
+    },
+    {
+      "type": "text_delta",
+      "text": "\n"
+    },
+    {
+      "type": "text_delta",
+      "text": "已"
+    },
+    {
+      "type": "text_delta",
+      "text": "创建"
+    },
+    {
+      "type": "text_delta",
+      "text": "待"
+    },
+    {
+      "type": "text_delta",
+      "text": "办"
+    },
+    {
+      "type": "text_delta",
+      "text": "「"
+    },
+    {
+      "type": "text_delta",
+      "text": "容器"
+    },
+    {
+      "type": "text_delta",
+      "text": "验收"
+    },
+    {
+      "type": "text_delta",
+      "text": "-"
+    },
+    {
+      "type": "text_delta",
+      "text": "292"
+    },
+    {
+      "type": "text_delta",
+      "text": "4"
+    },
+    {
+      "type": "text_delta",
+      "text": "d"
+    },
+    {
+      "type": "text_delta",
+      "text": "269"
+    },
+    {
+      "type": "text_delta",
+      "text": "」，"
+    },
+    {
+      "type": "text_delta",
+      "text": "时间是"
+    },
+    {
+      "type": "text_delta",
+      "text": " **"
+    },
+    {
+      "type": "text_delta",
+      "text": "202"
+    },
+    {
+      "type": "text_delta",
+      "text": "6"
+    },
+    {
+      "type": "text_delta",
+      "text": "年"
+    },
+    {
+      "type": "text_delta",
+      "text": "9"
+    },
+    {
+      "type": "text_delta",
+      "text": "月"
+    },
+    {
+      "type": "text_delta",
+      "text": "20"
+    },
+    {
+      "type": "text_delta",
+      "text": "日"
+    },
+    {
+      "type": "text_delta",
+      "text": "（"
+    },
+    {
+      "type": "text_delta",
+      "text": "明天"
+    },
+    {
+      "type": "text_delta",
+      "text": "）"
+    },
+    {
+      "type": "text_delta",
+      "text": "上午"
+    },
+    {
+      "type": "text_delta",
+      "text": " "
+    },
+    {
+      "type": "text_delta",
+      "text": "9"
+    },
+    {
+      "type": "text_delta",
+      "text": ":"
+    },
+    {
+      "type": "text_delta",
+      "text": "00"
+    },
+    {
+      "type": "text_delta",
+      "text": "**"
+    },
+    {
+      "type": "text_delta",
+      "text": "。"
+    },
+    {
+      "type": "busy_end"
+    },
+    {
+      "type": "token_usage",
+      "input": 12650,
+      "output": 180
+    },
+    {
+      "type": "turn_end"
+    },
+    {
+      "type": "done",
+      "session_id": "container-acceptance"
+    }
+  ],
+  "created_records": [
+    {
+      "id": "05f6deed7a9b477da01848684e4eb43e",
+      "kind": "todos",
+      "title": "容器验收-2924d269",
+      "detail": null,
+      "due_at": "2026-09-20T01:00:00+00:00",
+      "status": "open",
+      "created_at": "2026-09-19T03:33:44.598493+00:00",
+      "updated_at": "2026-09-19T03:33:44.598493+00:00",
+      "source": null,
+      "meta": {},
+      "due_at_local": "2026-09-20T09:00:00+08:00"
+    }
+  ],
+  "base_url_after_restart": "http://127.0.0.1:60771"
+}

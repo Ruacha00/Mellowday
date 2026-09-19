@@ -1,0 +1,9 @@
+{
+  "imports_installed_wheel": true,
+  "health_without_credentials": true,
+  "serves_/": true,
+  "serves_/app.js": true,
+  "serves_/styles.css": true,
+  "creates_record": true,
+  "restart_preserves_record": true
+}

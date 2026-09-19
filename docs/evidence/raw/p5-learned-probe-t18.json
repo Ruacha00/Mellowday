@@ -1,0 +1,672 @@
+{
+  "gate": "p5-comparison",
+  "generated_utc": "2026-09-18T13:58:46+00:00",
+  "argv": [
+    "evals/p5_compare.py",
+    "--samples",
+    "1",
+    "--only",
+    "learned",
+    "--json-out",
+    "docs\\evidence\\raw\\p5-learned-probe-t18.json"
+  ],
+  "samples_per_case": 1,
+  "conditions": [
+    "off",
+    "fixed",
+    "learned"
+  ],
+  "cases": [
+    "dev",
+    "holdout"
+  ],
+  "note": "minimal comparison: counts with denominators, no improvement ratio is computed or claimed; the dev case is the request the correction was made about, the holdout case uses different records seeded after the learning turn",
+  "same_model_configuration": true,
+  "arms_isolated_in_separate_processes": false,
+  "arm_processes": [],
+  "results": [
+    {
+      "condition": "learned",
+      "run": {
+        "gate": "p5-comparison-learned",
+        "run_id": "20260918T135729Z-e4ce",
+        "started_utc": "2026-09-18T13:57:29+00:00",
+        "finished_utc": "2026-09-18T13:58:46+00:00",
+        "argv": [
+          "evals/p5_compare.py",
+          "--samples",
+          "1",
+          "--only",
+          "learned",
+          "--json-out",
+          "docs\\evidence\\raw\\p5-learned-probe-t18.json"
+        ],
+        "cwd": "D:\\Projects\\Agent Learn\\Project\\MellowDay-Rebuild",
+        "run_dir": "D:\\Projects\\Agent Learn\\Project\\MellowDay-Rebuild\\output\\gate-runs\\p5-comparison-learned\\20260918T135729Z-e4ce",
+        "data_dir": "D:\\Projects\\Agent Learn\\Project\\MellowDay-Rebuild\\output\\gate-runs\\p5-comparison-learned\\20260918T135729Z-e4ce\\data",
+        "artifacts_dir": "D:\\Projects\\Agent Learn\\Project\\MellowDay-Rebuild\\output\\gate-runs\\p5-comparison-learned\\20260918T135729Z-e4ce\\artifacts",
+        "keep_run_dir": true,
+        "source_data_dir": "D:\\Projects\\Agent Learn\\Project\\MellowDay-Rebuild\\data",
+        "source_resolution": ".env:MELLOWDAY_DATA_DIR",
+        "environment": {
+          "python": "3.12.7",
+          "platform": "Windows-11-10.0.26200-SP0",
+          "openai": "2.39.0",
+          "anthropic": "0.76.0",
+          "pytest": "7.4.4",
+          "fastapi": "0.110.0",
+          "uvicorn": "0.40.0"
+        }
+      },
+      "fingerprint": "c1b5db51612630d3",
+      "model_config": {
+        "model": "deepseek-v4-pro",
+        "api_base": "https://api.deepseek.com",
+        "thinking": false,
+        "max_turns": null,
+        "api_key_present": true,
+        "api_key_fingerprint": "691ed35d948a",
+        "source": "data-config"
+      },
+      "measurements": {
+        "dev": {
+          "condition": "learned",
+          "case": "dev",
+          "ask": "帮我规划一下明天要做的事。",
+          "case_meta": {
+            "event": "每日站会",
+            "todos": [
+              "写季度报告",
+              "开项目周会",
+              "买生日礼物",
+              "整理收件箱",
+              "续保车险",
+              "预约体检"
+            ],
+            "ask": "帮我规划一下明天要做的事。"
+          },
+          "samples": [
+            {
+              "session_id": "learned-dev-729Z-e4ce-0",
+              "message": "帮我规划一下明天要做的事。",
+              "valid": true,
+              "invalid_reason": "",
+              "reply": "\n明天是周六（9月19日）。\n\n**固定日程**\n- 09:30 每日站会\n\n**建议的三个重点任务**\n1. 准备演示材料（为周一 14:00 的客户复盘会提前准备）\n2. 提交周报（截止周日）\n3. 跟进合同（截止周日）\n\n其余如更新报价单、预约体检、续保车险等可先缓一缓。\n\n要不要我把这三个任务建到明天的待办里？",
+              "tool_calls": [
+                {
+                  "name": "skill",
+                  "arguments": "{\"name\": \"日程规划输出规范\"}"
+                },
+                {
+                  "name": "list_calendar",
+                  "arguments": "{\"status\": \"scheduled\"}"
+                },
+                {
+                  "name": "list_todos",
+                  "arguments": "{\"status\": \"open\"}"
+                }
+              ],
+              "tool_results": [
+                {
+                  "name": "skill",
+                  "result": "[Skill \"\" activated]\n\n# Skill Instructions\n\n1. 先列出当天已有的固定日程或既定安排。2. 然后只筛选并排定三个重点任务。3. 不要一次列出十几条或过多待办事项。\n\n## Creation Evidence\n\n用户纠正：'以后帮我规划的时候，必须先列出当天已有的固定日程，然后只排三个重点任务，不要一次列十几条。'"
+                },
+                {
+                  "name": "list_calendar",
+                  "result": "{\"ok\": true, \"kind\": \"calendar\", \"count\": 2, \"records\": [{\"id\": \"ddd1b6c060cb4ea2b54dc7f95856d6a7\", \"kind\": \"calendar\", \"title\": \"客户复盘会\", \"detail\": \"演示用日程\", \"due_at\": \"2026-09-21T06:00:00+00:00\", \"status\": \"scheduled\", \"created_at\": \"2026-09-18T13:58:03.452189+00:00\", \"updated_at\": \"2026-09-18T13:58:03.452189+00:00\", \"source\": null, \"meta\": {}, \"due_at_local\": \"2026-09-21T14:00:00+08:00\"}, {\"id\": ...[+328 chars]"
+                },
+                {
+                  "name": "list_todos",
+                  "result": "{\"ok\": true, \"kind\": \"todos\", \"count\": 10, \"records\": [{\"id\": \"cd6a267c924d408891501d39f2966647\", \"kind\": \"todos\", \"title\": \"提交周报\", \"detail\": null, \"due_at\": \"2026-09-20T16:00:00+00:00\", \"status\": \"open\", \"created_at\": \"2026-09-18T13:58:03.581388+00:00\", \"updated_at\": \"2026-09-18T13:58:03.581388+00:00\", \"source\": null, \"meta\": {}, \"due_at_local\": \"2026-09-21T00:00:00+08:00\"}, {\"id\": \"a1bb17c8254e4...[+2902 chars]"
+                }
+              ],
+              "errors": [],
+              "learning_events": [],
+              "confirmations": [],
+              "warnings": [],
+              "notices": [],
+              "freshness": {
+                "session_id": "learned-dev-729Z-e4ce-0",
+                "history_before": 0,
+                "trace_before": 0,
+                "fresh": true
+              },
+              "hit": false,
+              "rule": {
+                "ok": false,
+                "detail": {
+                  "assertions": {
+                    "real_calendar_entry_present": true,
+                    "calendar_entry_listed": true,
+                    "at_least_3_real_todos_adopted": false,
+                    "a_block_presents_exactly_3_priority_tasks": false,
+                    "no_block_lists_more_than_10_items": true
+                  },
+                  "failed": [
+                    "a_block_presents_exactly_3_priority_tasks",
+                    "at_least_3_real_todos_adopted"
+                  ],
+                  "evidence": {
+                    "blocks": [
+                      {
+                        "items": 0,
+                        "block": "明天是周六（9月19日）。",
+                        "excerpt": []
+                      },
+                      {
+                        "items": 0,
+                        "block": "**固定日程**\n- 09:30 每日站会",
+                        "excerpt": []
+                      },
+                      {
+                        "items": 3,
+                        "block": "**建议的三个重点任务**\n1. 准备演示材料（为周一 14:00 的客户复盘会提前准备）\n2. 提交周报（截止周日）\n3. 跟进合同（截止周日）",
+                        "excerpt": [
+                          "1. 准备演示材料（为周一 14:00 的客户复盘会提前准备）",
+                          "2. 提交周报（截止周日）",
+                          "3. 跟进合同（截止周日）"
+                        ]
+                      },
+                      {
+                        "items": 0,
+                        "block": "其余如更新报价单、预约体检、续保车险等可先缓一缓。",
+                        "excerpt": []
+                      },
+                      {
+                        "items": 0,
+                        "block": "要不要我把这三个任务建到明天的待办里？",
+                        "excerpt": []
+                      }
+                    ],
+                    "event_title": "每日站会",
+                    "event_in_reply": true,
+                    "todos_adopted": [
+                      "续保车险",
+                      "预约体检"
+                    ],
+                    "todos_defined": 6,
+                    "priority_block": "",
+                    "priority_block_items": 0,
+                    "priority_block_items_excerpt": [],
+                    "priority_blocks_found": 0,
+                    "max_items_in_any_block": 3,
+                    "thresholds": {
+                      "priority_items": 3,
+                      "priority_items_min_real_todos": 2,
+                      "min_real_todos": 3,
+                      "max_items_per_block": 10
+                    },
+                    "note": "structural: no section title is asserted. A block qualifies as the priority list when it holds exactly 3 top-level items and at least two of them are real to-do titles; 'no long list' is 10 items in one block, not five, because a six-item 'everything else' list is not 十几条"
+                  }
+                }
+              },
+              "rule_loaded": true,
+              "delivery": {
+                "retrieved_block_mentions_rule": false,
+                "body_probe_in_payload": false,
+                "system_prompt_advertises_rule": true,
+                "probes": {
+                  "rule_name": "日程规划输出规范",
+                  "body_probe": "description: 为用户"
+                },
+                "retrieved_blocks": []
+              },
+              "probe_locations": {
+                "probes": [
+                  "固定日程",
+                  "重点任务",
+                  "description: 为用户"
+                ],
+                "in_recalled_facts_block": [],
+                "in_superseded_block": [],
+                "elsewhere_in_request": [
+                  "固定日程",
+                  "重点任务"
+                ],
+                "present_anywhere": [
+                  "固定日程",
+                  "重点任务"
+                ],
+                "requests_scanned": 2
+              },
+              "channels": {
+                "via_skill_or_conversation": [
+                  "日程规划输出规范"
+                ],
+                "via_recalled_facts": [],
+                "via_superseded_values": []
+              },
+              "models_sent": [
+                "deepseek-v4-pro"
+              ]
+            }
+          ],
+          "hits": 0,
+          "valid": 1,
+          "of": 1,
+          "rule_loaded": 1,
+          "samples_carrying_rule_text": 1,
+          "adherence": "0/1",
+          "rule_loaded_ratio": "1/1"
+        },
+        "holdout": {
+          "condition": "learned",
+          "case": "holdout",
+          "ask": "帮我规划一下下周一的安排。",
+          "case_meta": {
+            "event": "客户复盘会",
+            "todos": [
+              "准备演示材料",
+              "更新报价单",
+              "跟进合同",
+              "提交周报"
+            ],
+            "ask": "帮我规划一下下周一的安排。"
+          },
+          "samples": [
+            {
+              "session_id": "learned-holdout-729Z-e4ce-0",
+              "message": "帮我规划一下下周一的安排。",
+              "valid": true,
+              "invalid_reason": "",
+              "reply": "\n下周一（9 月 21 日）目前日历里没有固定日程。结合你的习惯（上午深度工作、下午会议），帮你这样安排：\n\n**上午 · 深度工作**\n1. 提交周报\n2. 更新报价单\n\n**下午 · 沟通/会议**\n3. 跟进合同\n\n另外「准备演示材料」也是周一到期，但按\"只排三个重点任务\"的规则先没排进去——如果需要，可以把它替换掉其中一项，或我把它记到下周二。\n\n需要我直接把这些写进日历/待办吗？",
+              "tool_calls": [
+                {
+                  "name": "skill",
+                  "arguments": "{\"name\": \"日程规划输出规范\"}"
+                },
+                {
+                  "name": "list_calendar",
+                  "arguments": "{\"status\": \"open\", \"limit\": 50}"
+                },
+                {
+                  "name": "list_todos",
+                  "arguments": "{\"status\": \"open\", \"limit\": 50}"
+                }
+              ],
+              "tool_results": [
+                {
+                  "name": "skill",
+                  "result": "[Skill \"\" activated]\n\n# Skill Instructions\n\n1. 先列出当天已有的固定日程或既定安排。2. 然后只筛选并排定三个重点任务。3. 不要一次列出十几条或过多待办事项。\n\n## Creation Evidence\n\n用户纠正：'以后帮我规划的时候，必须先列出当天已有的固定日程，然后只排三个重点任务，不要一次列十几条。'"
+                },
+                {
+                  "name": "list_calendar",
+                  "result": "{\"ok\": true, \"kind\": \"calendar\", \"count\": 0, \"records\": []}"
+                },
+                {
+                  "name": "list_todos",
+                  "result": "{\"ok\": true, \"kind\": \"todos\", \"count\": 10, \"records\": [{\"id\": \"cd6a267c924d408891501d39f2966647\", \"kind\": \"todos\", \"title\": \"提交周报\", \"detail\": null, \"due_at\": \"2026-09-20T16:00:00+00:00\", \"status\": \"open\", \"created_at\": \"2026-09-18T13:58:03.581388+00:00\", \"updated_at\": \"2026-09-18T13:58:03.581388+00:00\", \"source\": null, \"meta\": {}, \"due_at_local\": \"2026-09-21T00:00:00+08:00\"}, {\"id\": \"a1bb17c8254e4...[+2902 chars]"
+                }
+              ],
+              "errors": [],
+              "learning_events": [],
+              "confirmations": [],
+              "warnings": [],
+              "notices": [],
+              "freshness": {
+                "session_id": "learned-holdout-729Z-e4ce-0",
+                "history_before": 0,
+                "trace_before": 0,
+                "fresh": true
+              },
+              "hit": false,
+              "rule": {
+                "ok": false,
+                "detail": {
+                  "assertions": {
+                    "real_calendar_entry_present": false,
+                    "calendar_entry_listed": false,
+                    "at_least_3_real_todos_adopted": true,
+                    "a_block_presents_exactly_3_priority_tasks": false,
+                    "no_block_lists_more_than_10_items": true
+                  },
+                  "failed": [
+                    "a_block_presents_exactly_3_priority_tasks",
+                    "calendar_entry_listed",
+                    "real_calendar_entry_present"
+                  ],
+                  "evidence": {
+                    "blocks": [
+                      {
+                        "items": 0,
+                        "block": "下周一（9 月 21 日）目前日历里没有固定日程。结合你的习惯（上午深度工作、下午会议），帮你这样安排：",
+                        "excerpt": []
+                      },
+                      {
+                        "items": 2,
+                        "block": "**上午 · 深度工作**\n1. 提交周报\n2. 更新报价单",
+                        "excerpt": [
+                          "1. 提交周报",
+                          "2. 更新报价单"
+                        ]
+                      },
+                      {
+                        "items": 1,
+                        "block": "**下午 · 沟通/会议**\n3. 跟进合同",
+                        "excerpt": [
+                          "3. 跟进合同"
+                        ]
+                      },
+                      {
+                        "items": 0,
+                        "block": "另外「准备演示材料」也是周一到期，但按\"只排三个重点任务\"的规则先没排进去——如果需要，可以把它替换掉其中一项，或我把它记到下周二。",
+                        "excerpt": []
+                      },
+                      {
+                        "items": 0,
+                        "block": "需要我直接把这些写进日历/待办吗？",
+                        "excerpt": []
+                      }
+                    ],
+                    "event_title": "客户复盘会",
+                    "event_in_reply": false,
+                    "todos_adopted": [
+                      "准备演示材料",
+                      "更新报价单",
+                      "跟进合同",
+                      "提交周报"
+                    ],
+                    "todos_defined": 4,
+                    "priority_block": "",
+                    "priority_block_items": 0,
+                    "priority_block_items_excerpt": [],
+                    "priority_blocks_found": 0,
+                    "max_items_in_any_block": 2,
+                    "thresholds": {
+                      "priority_items": 3,
+                      "priority_items_min_real_todos": 2,
+                      "min_real_todos": 3,
+                      "max_items_per_block": 10
+                    },
+                    "note": "structural: no section title is asserted. A block qualifies as the priority list when it holds exactly 3 top-level items and at least two of them are real to-do titles; 'no long list' is 10 items in one block, not five, because a six-item 'everything else' list is not 十几条"
+                  }
+                }
+              },
+              "rule_loaded": true,
+              "delivery": {
+                "retrieved_block_mentions_rule": true,
+                "body_probe_in_payload": false,
+                "system_prompt_advertises_rule": true,
+                "probes": {
+                  "rule_name": "日程规划输出规范",
+                  "body_probe": "description: 为用户"
+                },
+                "retrieved_blocks": [
+                  "<retrieved_skills>\\nThese skills were retrieved for the current user request. Use a skill only if it directly matches the user's intent; otherwise ignore this block.\\n1. 日程规划输出规范 (score=0.173, source=project): 为用户做日程/待办规划时，先列出当天已有的固定日程，再只安排三个重点任务，避免一次列出过多事项。\\n   When to use: 用户请求规划当天或未来某天的日程、待办安排时。\\n",
+                  "<retrieved_skills>\\nThese skills were retrieved for the current user request. Use a skill only if it directly matches the user's intent; otherwise ignore this block.\\n1. 日程规划输出规范 (score=0.173, source=project): 为用户做日程/待办规划时，先列出当天已有的固定日程，再只安排三个重点任务，避免一次列出过多事项。\\n   When to use: 用户请求规划当天或未来某天的日程、待办安排时。\\n",
+                  "<retrieved_skills>\\nThese skills were retrieved for the current user request. Use a skill only if it directly matches the user's intent; otherwise ignore this block.\\n1. 日程规划输出规范 (score=0.173, source=project): 为用户做日程/待办规划时，先列出当天已有的固定日程，再只安排三个重点任务，避免一次列出过多事项。\\n   When to use: 用户请求规划当天或未来某天的日程、待办安排时。\\n"
+                ]
+              },
+              "probe_locations": {
+                "probes": [
+                  "固定日程",
+                  "重点任务",
+                  "description: 为用户"
+                ],
+                "in_recalled_facts_block": [],
+                "in_superseded_block": [],
+                "elsewhere_in_request": [
+                  "固定日程",
+                  "重点任务"
+                ],
+                "present_anywhere": [
+                  "固定日程",
+                  "重点任务"
+                ],
+                "requests_scanned": 4
+              },
+              "channels": {
+                "via_skill_or_conversation": [
+                  "日程规划输出规范"
+                ],
+                "via_recalled_facts": [],
+                "via_superseded_values": []
+              },
+              "models_sent": [
+                "deepseek-v4-pro"
+              ]
+            }
+          ],
+          "hits": 0,
+          "valid": 1,
+          "of": 1,
+          "rule_loaded": 1,
+          "samples_carrying_rule_text": 1,
+          "adherence": "0/1",
+          "rule_loaded_ratio": "1/1"
+        }
+      },
+      "delivery_channels": {
+        "dev": {
+          "skill_only": 1,
+          "facts_only": 0,
+          "both_channels": 0,
+          "neither": 0,
+          "of": 1
+        },
+        "holdout": {
+          "skill_only": 1,
+          "facts_only": 0,
+          "both_channels": 0,
+          "neither": 0,
+          "of": 1
+        }
+      },
+      "learned_detail": {
+        "plan": {
+          "session_id": "learn-729Z-e4ce-0",
+          "message": "帮我规划一下明天要做的事。",
+          "valid": true,
+          "invalid_reason": "",
+          "reply": "\n明天是 **2026-09-19（周六）**。你现有 6 件待办和 1 个日程，结合你「上午深度工作、下午会议」的偏好，建议这样安排：\n\n**上午（专注）**\n- 09:30 每日站会（已排的日程）\n- 10:00–11:30 写季度报告\n- 11:30–12:00 整理收件箱\n\n**下午（会议 + 事务）**\n- 14:00 开项目周会\n- 15:00 续保车险\n- 15:30 预约体检\n- 16:30 买生日礼物\n\n两点提醒：\n1. 明天是周六，但列表里有站会、周会、季度报告、收件箱这几件工作事项——需要照常处理吗？\n2. 要我按上面时间把这些待办逐一排进日程吗？还是你只想先看个规划、时间自己定？",
+          "tool_calls": [
+            {
+              "name": "list_todos",
+              "arguments": "{\"status\": \"open\"}"
+            },
+            {
+              "name": "list_calendar",
+              "arguments": "{\"status\": \"scheduled\"}"
+            },
+            {
+              "name": "list_reminders",
+              "arguments": "{\"status\": \"scheduled\"}"
+            }
+          ],
+          "tool_results": [
+            {
+              "name": "list_todos",
+              "result": "{\"ok\": true, \"kind\": \"todos\", \"count\": 6, \"records\": [{\"id\": \"08feb17d84d449039de42d6e1f18734c\", \"kind\": \"todos\", \"title\": \"预约体检\", \"detail\": null, \"due_at\": \"2026-09-18T16:00:00+00:00\", \"status\": \"open\", \"created_at\": \"2026-09-18T13:57:30.268312+00:00\", \"updated_at\": \"2026-09-18T13:57:30.268312+00:00\", \"source\": null, \"meta\": {}, \"due_at_local\": \"2026-09-19T00:00:00+08:00\"}, {\"id\": \"1b77cfa2792447...[+1602 chars]"
+            },
+            {
+              "name": "list_calendar",
+              "result": "{\"ok\": true, \"kind\": \"calendar\", \"count\": 1, \"records\": [{\"id\": \"15a204d608af470c94a0e37e6810f4a5\", \"kind\": \"calendar\", \"title\": \"每日站会\", \"detail\": \"演示用日程\", \"due_at\": \"2026-09-19T01:30:00+00:00\", \"status\": \"scheduled\", \"created_at\": \"2026-09-18T13:57:30.120658+00:00\", \"updated_at\": \"2026-09-18T13:57:30.120658+00:00\", \"source\": null, \"meta\": {}, \"due_at_local\": \"2026-09-19T09:30:00+08:00\"}]}"
+            },
+            {
+              "name": "list_reminders",
+              "result": "{\"ok\": true, \"kind\": \"reminders\", \"count\": 0, \"records\": []}"
+            }
+          ],
+          "errors": [],
+          "learning_events": [],
+          "confirmations": [],
+          "warnings": [],
+          "notices": []
+        },
+        "correction": {
+          "session_id": "learn-729Z-e4ce-0",
+          "message": "不对。以后帮我规划的时候，必须先列出当天已有的固定日程，然后只排三个重点任务，不要一次列十几条。",
+          "valid": true,
+          "invalid_reason": "",
+          "reply": "\n记住了。以后帮你规划时会：先列当天固定日程，再只挑三个重点任务。\n\n按这个规则，明天（周六 2026-09-19）的安排是：\n\n**固定日程**\n- 09:30 每日站会\n\n**三个重点任务**\n1. 写季度报告\n2. 开项目周会\n3. 续保车险\n\n其余（预约体检、买生日礼物、整理收件箱）先不排进去，等你需要时再说。要我按这个直接排进日程吗？",
+          "tool_calls": [
+            {
+              "name": "remember_fact",
+              "arguments": "{\"content\": \"规划当天安排时：先列出当天已有的固定日程，然后只排三个重点任务，不要一次列很多条。\", \"kind\": \"preference\", \"label\": \"规划偏好\"}"
+            }
+          ],
+          "tool_results": [
+            {
+              "name": "remember_fact",
+              "result": "{\"ok\": true, \"id\": \"18ead25a8ca04d4a959b3950fc4ccf55\", \"operation_id\": \"op_0c4f1dfd99a84789bc97338135ef6e3a\", \"record\": {\"id\": \"18ead25a8ca04d4a959b3950fc4ccf55\", \"kind\": \"memories\", \"title\": \"规划偏好\", \"detail\": \"规划当天安排时：先列出当天已有的固定日程，然后只排三个重点任务，不要一次列很多条。\", \"due_at\": null, \"status\": \"active\", \"created_at\": \"2026-09-18T13:57:50.972428+00:00\", \"updated_at\": \"2026-09-18T13:57:50.972428+00:00\", \"source\":...[+53 chars]"
+            }
+          ],
+          "errors": [],
+          "learning_events": [
+            {
+              "type": "skill_candidate_proposed",
+              "skill": "日程规划输出规范",
+              "action": "add",
+              "summary": "检测到可以记住的新习惯「日程规划输出规范」，写入后只影响之后的新会话。\n用途：为用户做日程/待办规划时，先列出当天已有的固定日程，再只安排三个重点任务，避免一次列出过多事项。\n何时使用：用户请求规划当天或未来某天的日程、待办安排时。\n将写入的规则：\n- 1. 先列出当天已有的固定日程或既定安排。2. 然后只筛选并排定三个重点任务。3. 不要一次列出十几条或过多待办事项。\n标签：日程规划、输出规范、任务优先级\nonline skill evolution: add 日程规划输出规范"
+            },
+            {
+              "type": "skill_candidate_applied",
+              "skill": "日程规划输出规范",
+              "action": "add"
+            }
+          ],
+          "confirmations": [
+            {
+              "id": "5da13c666b7741c2b76b67bd3b5074d0",
+              "summary": "检测到可以记住的新习惯「日程规划输出规范」，写入后只影响之后的新会话。\n用途：为用户做日程/待办规划时，先列出当天已有的固定日程，再只安排三个重点任务，避免一次列出过多事项。\n何时使用：用户请求规划当天或未来某天的日程、待办安排时。\n将写入的规则：\n- 1. 先列出当天已有的固定日程或既定安排。2. 然后只筛选并排定三个重点任务。3. 不要一次列出十几条或过多待办事项。\n标签：日程规划、输出规范、任务优先级\nonline skill evolution: add 日程规划输出规范"
+            }
+          ],
+          "warnings": [],
+          "notices": [
+            "Online skill add: 日程规划输出规范",
+            "已由技能「日程规划输出规范」取代 1 条重复事实（规划偏好）；记录保留在事实库中，可查看，不再参与召回。"
+          ]
+        },
+        "skills": [
+          {
+            "name": "日程规划输出规范",
+            "version": "0.1.0",
+            "enabled": true,
+            "path": "D:\\Projects\\Agent Learn\\Project\\MellowDay-Rebuild\\output\\gate-runs\\p5-comparison-learned\\20260918T135729Z-e4ce\\data\\skills\\日程规划输出规范\\SKILL.md"
+          }
+        ],
+        "body_probe": "description: 为用户"
+      },
+      "prompt_has_rule": {
+        "日程规划输出规范": true,
+        "description: 为用户": false
+      },
+      "checks": [
+        {
+          "check": "isolation.real_data_directory_untouched",
+          "status": "passed",
+          "reason": ""
+        },
+        {
+          "check": "p5.condition_rule_state_is_as_intended",
+          "status": "passed",
+          "reason": ""
+        },
+        {
+          "check": "p5.learned_rule_is_not_active_in_the_fact_store",
+          "status": "passed",
+          "reason": ""
+        },
+        {
+          "check": "p5.learned_delivery_channels_recorded",
+          "status": "passed",
+          "reason": ""
+        },
+        {
+          "check": "p5.learned_payload_carrying_recorded (sampled 2)",
+          "status": "passed",
+          "reason": ""
+        },
+        {
+          "check": "p5.learned.dev_measured",
+          "status": "passed",
+          "reason": ""
+        },
+        {
+          "check": "p5.learned.holdout_measured",
+          "status": "passed",
+          "reason": ""
+        },
+        {
+          "check": "code.workspace_unchanged_during_the_run",
+          "status": "passed",
+          "reason": ""
+        },
+        {
+          "check": "secrets.no_credential_in_artifacts",
+          "status": "passed",
+          "reason": ""
+        }
+      ],
+      "summary": {
+        "passed": 9,
+        "failed": 0,
+        "inconclusive": 0,
+        "pending": 0,
+        "total": 9
+      },
+      "artifacts": {
+        "raw_requests": "D:\\Projects\\Agent Learn\\Project\\MellowDay-Rebuild\\output\\gate-runs\\p5-comparison-learned\\20260918T135729Z-e4ce\\artifacts\\model-calls.jsonl",
+        "report": "D:\\Projects\\Agent Learn\\Project\\MellowDay-Rebuild\\output\\gate-runs\\p5-comparison-learned\\20260918T135729Z-e4ce\\artifacts\\p5-learned-report.json"
+      }
+    }
+  ],
+  "table": [
+    {
+      "condition": "learned",
+      "case": "dev",
+      "hits": 0,
+      "valid": 1,
+      "of": 1,
+      "adherence": "0/1",
+      "rule_loaded": 1,
+      "via_skill_samples": 1,
+      "via_facts_samples": 0
+    },
+    {
+      "condition": "learned",
+      "case": "holdout",
+      "hits": 0,
+      "valid": 1,
+      "of": 1,
+      "adherence": "0/1",
+      "rule_loaded": 1,
+      "via_skill_samples": 1,
+      "via_facts_samples": 0
+    }
+  ],
+  "pre_t9_limitations": [
+    "The arm names describe the intended rule source, but pre-t9 the learned arm can also reach the model through the user-fact store (the runtime injects recalled facts into every session). Its adherence count is still a valid measurement of 'the rule is active and the reply follows it'; what is provisional is the attribution to the skill channel alone. The per-sample delivery_channels field records which channel carried the rule text, so a reader can see this without recomputing it.",
+    "The 'fixed' arm is skill-only by construction (a hand-written skill, no fact), and the 'off' arm never learns the rule at all, so those two arms are unaffected by the pre-t9 defect.",
+    "Anything about disabling a rule is out of scope here (the disabled condition is blocked in the core demonstration until t9 lands); this comparison only measures rule-present behaviour."
+  ],
+  "failures": [
+    {
+      "condition": "learned",
+      "case": "dev",
+      "session_id": "learned-dev-729Z-e4ce-0",
+      "invalid_reason": "",
+      "failed_assertions": [
+        "a_block_presents_exactly_3_priority_tasks",
+        "at_least_3_real_todos_adopted"
+      ],
+      "reply": "\n明天是周六（9月19日）。\n\n**固定日程**\n- 09:30 每日站会\n\n**建议的三个重点任务**\n1. 准备演示材料（为周一 14:00 的客户复盘会提前准备）\n2. 提交周报（截止周日）\n3. 跟进合同（截止周日）\n\n其余如更新报价单、预约体检、续保车险等可先缓一缓。\n\n要不要我把这三个任务建到明天的待办里？"
+    },
+    {
+      "condition": "learned",
+      "case": "holdout",
+      "session_id": "learned-holdout-729Z-e4ce-0",
+      "invalid_reason": "",
+      "failed_assertions": [
+        "a_block_presents_exactly_3_priority_tasks",
+        "calendar_entry_listed",
+        "real_calendar_entry_present"
+      ],
+      "reply": "\n下周一（9 月 21 日）目前日历里没有固定日程。结合你的习惯（上午深度工作、下午会议），帮你这样安排：\n\n**上午 · 深度工作**\n1. 提交周报\n2. 更新报价单\n\n**下午 · 沟通/会议**\n3. 跟进合同\n\n另外「准备演示材料」也是周一到期，但按\"只排三个重点任务\"的规则先没排进去——如果需要，可以把它替换掉其中一项，或我把它记到下周二。\n\n需要我直接把这些写进日历/待办吗？"
+    }
+  ],
+  "credential_scan": {
+    "hits": [],
+    "clean": true
+  }
+}

@@ -1,0 +1,50 @@
+# Docker build context.
+#
+# The image only needs pyproject.toml and src/, but this list is the second line
+# of defence: credentials and personal state must never reach the build context
+# (or a layer cache) even if a COPY instruction is widened later.
+#
+# Credentials. .env holds a real API key; .env.* covers every per-environment
+# variant, including the .env.docker.example template, which is a host-side file.
+.env
+.env.*
+*.pem
+
+# Version control and editor state
+.git
+.gitattributes
+.gitignore
+.idea/
+.vscode/
+
+# Personal runtime state: sessions, skills, memories, sqlite, traces, logs.
+# Copying this into an image would ship the developer's own assistant data.
+data/
+output/
+logs/
+*.log
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+
+# Build artefacts and caches
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.scratch/
+.scratch-wheel/
+.node_modules/
+node_modules/
+
+# Not needed to build or run the image
+tests/
+docs/
+evals/
+scripts/
+.local-planning/

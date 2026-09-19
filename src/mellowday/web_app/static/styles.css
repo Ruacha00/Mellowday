@@ -1,0 +1,171 @@
+:root {
+  --bg: #0f1115;
+  --panel: #161a21;
+  --panel-2: #1d232c;
+  --line: #262d38;
+  --text: #e6e9ef;
+  --muted: #8d97a6;
+  --accent: #7aa2f7;
+  --ok: #7bd88f;
+  --warn: #e0af68;
+  --err: #f7768e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+.app { display: grid; grid-template-columns: 248px 1fr; height: 100vh; }
+.sidebar { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 16px 12px; gap: 14px; }
+.brand { font-size: 16px; font-weight: 600; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; padding: 4px 8px; }
+.brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav-item { text-align: left; background: transparent; border: 0; color: var(--muted); padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 13.5px; }
+.nav-item:hover { background: var(--panel-2); color: var(--text); }
+.nav-item.active { background: var(--panel-2); color: var(--text); font-weight: 600; }
+.session-block { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; }
+.session-head { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12px; padding: 0 8px; }
+.session-head button { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; cursor: pointer; width: 22px; height: 22px; line-height: 1; }
+.session-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.session-list li { padding: 7px 9px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-list li:hover { background: var(--panel-2); color: var(--text); }
+.session-list li.active { background: var(--panel-2); color: var(--text); }
+.main { display: flex; flex-direction: column; min-width: 0; }
+.view { display: none; flex-direction: column; height: 100%; padding: 20px 26px; gap: 14px; min-height: 0; }
+.view.active { display: flex; }
+.view-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+h1 { font-size: 19px; margin: 0; font-weight: 600; }
+.muted { color: var(--muted); font-size: 12.5px; margin: 4px 0 0; }
+.messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 6px; }
+.msg { max-width: 780px; padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+.msg.user { align-self: flex-end; background: #263449; }
+.msg.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); }
+.msg.error { align-self: flex-start; background: #2c1c22; border: 1px solid #4b2a33; color: var(--err); }
+.chip { font-size: 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 10px; color: var(--muted); align-self: flex-start; max-width: 780px; }
+.chip b { color: var(--accent); font-weight: 600; }
+.chip pre { margin: 6px 0 0; white-space: pre-wrap; color: var(--text); font-size: 12px; }
+.confirm { align-self: flex-start; border: 1px solid var(--warn); background: #2a2418; border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
+.composer { display: flex; gap: 10px; align-items: flex-end; }
+textarea, input, select {
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 9px; padding: 10px 12px; font: inherit; outline: none; width: 100%;
+}
+textarea { resize: none; max-height: 160px; }
+textarea:focus, input:focus, select:focus { border-color: var(--accent); }
+button { background: var(--accent); color: #0d1117; border: 0; border-radius: 9px; padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 400; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+.inline-form input { width: auto; flex: 1 1 140px; }
+.table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; background: var(--panel); position: sticky; top: 0; }
+tr:last-child td { border-bottom: 0; }
+td .link { color: var(--accent); cursor: pointer; font-size: 12px; user-select: none; }
+td .link + .link { margin-left: 10px; }
+td .link:hover { text-decoration: underline; }
+td .link.toggle { color: var(--warn); }
+td .link.danger { color: var(--err); }
+td .link.spent { color: var(--muted); }
+td .link.cancel { color: var(--muted); }
+.settings-form { display: flex; flex-direction: column; gap: 14px; max-width: 480px; }
+.settings-form label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12.5px; }
+.row { display: flex; align-items: center; gap: 12px; }
+.empty { color: var(--muted); font-size: 13px; padding: 20px 0; }
+
+/* records management: undo bar, edit state, inline status */
+.records-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.records-toolbar button { padding: 7px 13px; font-size: 12.5px; }
+.records-toolbar button.spent { opacity: .5; }
+.records-notice { font-size: 12.5px; color: var(--muted); word-break: break-word; }
+.records-notice.ok { color: var(--ok); }
+.records-notice.warn { color: var(--warn); }
+.records-notice.error { color: var(--err); }
+.row-actions { white-space: nowrap; }
+.cell-time { white-space: nowrap; }
+.cell-detail { color: var(--muted); }
+.cell-input { padding: 6px 9px; font-size: 12.5px; border-radius: 7px; }
+.cell-input.due { min-width: 190px; }
+tr.editing td { background: rgba(122, 162, 247, .07); }
+.status-badge {
+  display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+  padding: 2px 9px; font-size: 12px; color: var(--muted); white-space: nowrap;
+}
+.status-badge.done { color: var(--ok); border-color: rgba(123, 216, 143, .45); }
+
+/* habits (skills) management: list, state badge, versions, notices */
+.skills-notice { font-size: 12.5px; color: var(--muted); word-break: break-word; min-height: 18px; }
+.skills-notice.ok { color: var(--ok); }
+.skills-notice.warn { color: var(--warn); }
+.skills-notice.error { color: var(--err); }
+.skills-list { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding-right: 6px; }
+.skill-card { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.skill-card.disabled { border-style: dashed; opacity: .8; }
+.skill-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.skill-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.skill-name { font-size: 14.5px; font-weight: 600; word-break: break-word; }
+.skill-meta { color: var(--muted); font-size: 12px; }
+.skill-desc { margin: 0; font-size: 13px; word-break: break-word; }
+.skill-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.skill-actions button { padding: 6px 12px; font-size: 12.5px; }
+.status-badge.enabled { color: var(--ok); border-color: rgba(123, 216, 143, .45); }
+.status-badge.disabled { color: var(--warn); border-color: rgba(224, 175, 104, .45); }
+.status-badge.current-badge { color: var(--accent); border-color: rgba(122, 162, 247, .45); }
+.skill-versions { border-top: 1px solid var(--line); padding-top: 9px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.skill-versions-head { color: var(--muted); }
+.skill-hint { margin: 0; color: var(--warn); }
+.skill-version { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 9px; border-radius: 7px; background: var(--panel-2); }
+.skill-version.current { border: 1px solid rgba(122, 162, 247, .35); }
+.skill-version-label { font-weight: 600; color: var(--text); min-width: 54px; }
+.skill-version-time { color: var(--muted); }
+.skill-version-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.skill-version-actions .link { color: var(--accent); cursor: pointer; font-size: 12px; user-select: none; }
+.skill-version-actions .link:hover { text-decoration: underline; }
+.skill-confirm { color: var(--warn); }
+.skill-confirm-yes { background: var(--warn); color: #0d1117; padding: 5px 11px; font-size: 12.5px; }
+.skill-versions button.ghost { padding: 5px 11px; font-size: 12.5px; }
+
+/* rule body view + editor (F item): the rules the assistant follows must be
+   visible, editable and restorable, not just the habit's name and version. */
+.skill-detail { border-top: 1px solid var(--line); padding-top: 9px; display: flex; flex-direction: column; gap: 8px; }
+.skill-body { margin: 0; padding: 10px 12px; border-radius: 8px; background: #0d1117; border: 1px solid var(--line); color: var(--text); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
+.skill-notes { margin: 0; padding: 9px 12px; border-radius: 8px; background: var(--panel-2); border: 1px dashed var(--line); color: var(--muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow: auto; }
+.skill-editor { display: flex; flex-direction: column; gap: 8px; }
+.skill-field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); }
+.skill-input, .skill-textarea { width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; }
+.skill-textarea { min-height: 150px; resize: vertical; line-height: 1.5; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.skill-editor-actions { display: flex; gap: 8px; }
+.skill-editor-actions button { padding: 6px 12px; font-size: 12.5px; }
+.skill-save { background: var(--accent); color: #0d1117; }
+.skill-version-body { padding-top: 6px; }
+.skill-version-body .skill-body { max-height: 200px; }
+.version-body-link { color: var(--accent); cursor: pointer; font-size: 12px; user-select: none; }
+.version-body-link:hover { text-decoration: underline; }
+
+/* 学习写入的确认文本是多行的（候选规则 + 旧→新对照），按行显示而不是挤成一行 */
+.confirm-text { white-space: pre-line; }
+
+/* history panel: the raw execution record (tool calls, results, errors) */
+.trace-notice { font-size: 12.5px; color: var(--muted); border-left: 2px solid var(--line); padding: 4px 0 4px 8px; word-break: break-word; }
+.trace-notice.warn { color: var(--warn); border-left-color: var(--warn); }
+.trace-notice.error { color: var(--err); border-left-color: var(--err); }
+.trace-row { display: flex; flex-direction: column; gap: 6px; }
+.trace-tool { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 8px 10px; align-self: flex-start; max-width: 88%; }
+.trace-head { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.trace-head:hover { text-decoration: underline; }
+.trace-body { display: flex; flex-direction: column; gap: 6px; }
+.trace-pre { margin: 0; padding: 9px 11px; border-radius: 8px; background: #0d1117; border: 1px solid var(--line); color: var(--text); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
+.trace-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.trace-actions button { padding: 5px 11px; font-size: 12.5px; }
+.trace-meta { color: var(--muted); font-size: 11.5px; word-break: break-all; }
+.trace-note { margin: 0; color: var(--muted); font-size: 12px; }
+.trace-note.warn { color: var(--warn); }
+.trace-note.error { color: var(--err); }
+.trace-original-box { display: flex; flex-direction: column; gap: 6px; }
+.trace-original-text { max-height: 420px; }
+.trace-error { border-color: rgba(240, 113, 120, .5); color: var(--err); font-size: 12.5px; }
+
+/* 记忆管理：被技能取代的事实要显示来源（技能名 + 本地时间），不是只有一个徽章 */
+.record-source { display: block; margin-top: 5px; padding-left: 7px; border-left: 2px solid var(--line); color: var(--muted); font-size: 11.5px; line-height: 1.5; word-break: break-word; }
+.record-source.warn { border-left-color: var(--warn); color: var(--warn); }
