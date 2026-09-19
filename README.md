@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+前端已加入页面淡入、抽屉滑动、控件反馈和回复等待动效，支持系统减少动态效果；本机 4 倍 CPU 降速实测帧间隔 P95 为 16.8ms，范围与限制见[动效验收](docs/evidence/MOTION-acceptance.md)。
+
 新增 Vue 3 / TypeScript / Vite 前端，恢复五种主题与对话、今日、生活、记忆、设置导航，接入现有运行时。Compose 分为 frontend 与 api 两个容器，继续使用原数据卷。当前后端 542 项、前端 40 项离线测试通过，浏览器、真实容器与备份回退均已验收。见[专项 Spec](docs/specs/FRONTEND-ROLLOUT.md)、[原子任务板](docs/issues/FRONTEND-BOARD.md)及[前端部署验收](docs/evidence/FD-acceptance.md)。
 
 此前第四轮完成应用验收：541 项离线测试通过，真实运行时门禁 19/19、核心演示 24/24；显式迁移学习门禁已有 25/25 证据。P5 三条件对照已在相同代码与模型配置下重跑，结果及限制见[运行时验收报告](docs/evidence/R4-acceptance.md)。Docker 独立容器验收 17/17、Wheel 安装式运行 7/7 通过。完整技术栈支持

@@ -82,17 +82,23 @@ function onKeydown(event: KeyboardEvent) {
       aria-live="polite"
       aria-relevant="additions text"
     >
-      <article
+      <Transition
         v-for="(message, index) in messages"
         :key="index"
-        :class="['message', { 'message-user': message.role === 'user' }]"
+        name="message"
+        :css="busy"
+        appear
       >
-        <span class="message-author">{{
-          message.role === "user" ? "你" : "MellowDay"
-        }}</span>
-        <MarkdownContent v-if="message.content" :content="message.content" />
-        <p v-else class="muted">正在想一想…</p>
-      </article>
+        <article
+          :class="['message', { 'message-user': message.role === 'user' }]"
+        >
+          <span class="message-author">{{
+            message.role === "user" ? "你" : "MellowDay"
+          }}</span>
+          <MarkdownContent v-if="message.content" :content="message.content" />
+          <p v-else class="muted">正在想一想…</p>
+        </article>
+      </Transition>
     </div>
     <EventFeed :events="events" />
     <section
@@ -139,9 +145,14 @@ function onKeydown(event: KeyboardEvent) {
         @keydown="onKeydown"
       />
       <div class="composer-actions">
-        <span class="muted" role="status">{{
-          busy ? phase : "Enter 发送 · Shift + Enter 换行"
-        }}</span>
+        <span class="muted composer-status" role="status">
+          <span v-if="busy" class="thinking-dots" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </span>
+          {{
+            busy ? phase || "正在想一想…" : "Enter 发送 · Shift + Enter 换行"
+          }}
+        </span>
         <button v-if="busy" type="button" class="button danger" @click="stop">
           停止
         </button>

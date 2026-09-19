@@ -578,7 +578,10 @@ th {
   }
   .sidebar,
   .nav-collapsed .sidebar {
-    display: none;
+    display: flex;
+    visibility: hidden;
+    transform: translateX(-100%);
+    pointer-events: none;
     top: 0;
     width: min(300px, 85vw);
     background: var(--surface);
@@ -586,7 +589,9 @@ th {
     padding: 20px 16px;
   }
   .sidebar.is-open {
-    display: flex;
+    visibility: visible;
+    transform: translateX(0);
+    pointer-events: auto;
   }
   .nav-collapsed .sidebar-brand,
   .nav-collapsed .nav-label,
@@ -601,7 +606,6 @@ th {
     position: fixed;
     inset: 0;
     background: #15243c66;
-    backdrop-filter: blur(3px);
     z-index: 25;
     border: 0;
   }

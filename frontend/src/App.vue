@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAppearance } from "./appearance/useAppearance";
 import { useConversation } from "./conversation/useConversation";
@@ -19,6 +26,16 @@ const {
   newSession,
 } = useConversation();
 const menuOpen = ref(false);
+const isMobile = ref(false);
+const pageHidden = ref(false);
+let mobileQuery: MediaQueryList | undefined;
+function syncViewport() {
+  isMobile.value = mobileQuery?.matches ?? false;
+  if (!isMobile.value) menuOpen.value = false;
+}
+function syncVisibility() {
+  pageHidden.value = document.hidden;
+}
 const collapsed = ref(false);
 const sessionOpenError = ref("");
 let navigationRevision = 0;
@@ -117,7 +134,16 @@ watch(
   { flush: "sync" },
 );
 onMounted(() => {
+  mobileQuery = window.matchMedia?.("(max-width: 700px)");
+  syncViewport();
+  syncVisibility();
+  mobileQuery?.addEventListener("change", syncViewport);
+  document.addEventListener("visibilitychange", syncVisibility);
   void refreshSessions();
+});
+onBeforeUnmount(() => {
+  mobileQuery?.removeEventListener("change", syncViewport);
+  document.removeEventListener("visibilitychange", syncVisibility);
 });
 </script>
 
@@ -125,6 +151,7 @@ onMounted(() => {
   <div
     class="app-frame"
     :class="{ 'nav-collapsed': collapsed }"
+    :data-page-hidden="pageHidden || undefined"
     @keydown.esc="closeMenu(true)"
   >
     <div v-if="theme.assets" class="theme-decoration" aria-hidden="true">
@@ -150,16 +177,20 @@ onMounted(() => {
         >◉ <span>{{ theme.label }}</span></RouterLink
       >
     </header>
-    <button
-      v-if="menuOpen"
-      class="drawer-backdrop"
-      aria-label="关闭导航"
-      @click="closeMenu(true)"
-    ></button>
+    <Transition name="shade">
+      <button
+        v-if="menuOpen"
+        class="drawer-backdrop"
+        aria-label="关闭导航"
+        @click="closeMenu(true)"
+      ></button>
+    </Transition>
     <aside
       ref="drawer"
       class="sidebar"
       :class="{ 'is-open': menuOpen }"
+      :inert="(isMobile && !menuOpen) || undefined"
+      :aria-hidden="(isMobile && !menuOpen) || undefined"
       :role="menuOpen ? 'dialog' : undefined"
       :aria-modal="menuOpen || undefined"
       aria-label="主导航"
@@ -253,7 +284,11 @@ onMounted(() => {
         >{{ pendingConfirmation ? "有一项操作等待你的确认" : "对话正在进行" }} ·
         返回对话 →</RouterLink
       >
-      <RouterView :key="route.path" />
+      <RouterView v-slot="{ Component }">
+        <div :key="route.path" class="route-page">
+          <component :is="Component" />
+        </div>
+      </RouterView>
     </main>
   </div>
 </template>
