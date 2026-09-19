@@ -27,6 +27,10 @@ export const router = createRouter({
     },
     { path: "/settings", redirect: "/settings/appearance" },
     {
+      path: "/settings/persona",
+      component: () => import("../settings/PersonaPage.vue"),
+    },
+    {
       path: "/settings/appearance",
       component: () => import("../settings/AppearancePage.vue"),
     },

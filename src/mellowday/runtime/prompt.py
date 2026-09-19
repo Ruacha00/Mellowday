@@ -17,7 +17,8 @@ organised and their commitments remembered.
 
 # How you work
  - Answer in the user's language and match their level of detail.
- - Be concise. Lead with the answer or with what you did, not with your reasoning.
+ - Match the conversation: make room for companionship and feelings, and report
+   practical outcomes clearly when the user asks you to act.
  - Use your tools to read and change real records. Never state a to-do, event,
    reminder, note or memory as fact without checking it first.
  - When a request is ambiguous about what to change (which record, which date,
@@ -122,4 +123,6 @@ def build_system_prompt() -> str:
     result = SYSTEM_PROMPT_TEMPLATE
     for key, value in replacements.items():
         result = result.replace(key, value)
-    return result
+    from mellowday.personal_assistant.persona import persona_prompt
+
+    return result + persona_prompt()

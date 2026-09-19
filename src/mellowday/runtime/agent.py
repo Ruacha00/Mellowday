@@ -481,6 +481,9 @@ class Agent:
     #主入口
 
     async def  chat(self, user_message:str)->None:
+        # Adopt user-managed conversation settings before the first model call,
+        # including turns that produce no tool calls at all.
+        self._refresh_runtime_system_prompt()
         #懒加载MCP服务在第一次chat的时候
         if not self._mcp_initialized and not self.is_sub_agent:
             self._mcp_initialized = True

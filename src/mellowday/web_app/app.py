@@ -48,6 +48,28 @@ def create_app(*, store: Store | None = None, registry: service.SessionRegistry 
 
     # ----------------------------------------------------------- chat
 
+    @app.get("/api/persona")
+    async def read_persona() -> dict[str, str]:
+        from mellowday.personal_assistant.persona import load_persona, PersonaError
+        try:
+            return load_persona()
+        except PersonaError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.put("/api/persona")
+    async def write_persona(payload: dict[str, Any] = Body(...)) -> dict[str, str]:
+        from mellowday.personal_assistant.persona import save_persona, validate_persona, PersonaError
+        try:
+            validate_persona(payload)
+        except PersonaError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        try:
+            return save_persona(payload)
+        except PersonaError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail="人格配置保存失败，请重试；未报告保存成功") from exc
+
     @app.post("/api/chat")
     async def chat(request: Request, payload: dict[str, Any] = Body(default_factory=dict)):
         message = str(payload.get("message") or "")

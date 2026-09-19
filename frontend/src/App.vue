@@ -56,6 +56,7 @@ const life = [
 ];
 const settings = [
   ["/settings/appearance", "外观"],
+  ["/settings/persona", "人格与陪伴"],
   ["/settings/providers", "模型"],
   ["/settings/skills", "习惯与技能"],
   ["/settings/history", "对话历史"],
