@@ -129,6 +129,7 @@ async def test_next_turn_uses_a_new_model_and_keeps_the_history(tmp_path, script
     tools_before = [tool["name"] for tool in agent.tools]
     transcript_before = json.dumps(agent._openai_messages, ensure_ascii=False)
     client_before = agent._openai_client
+    requests_before_save = len(created[0].chat.completions.calls)
 
     # The user saves new settings in the settings page.
     monkeypatch.setenv("MELLOWDAY_MODEL", "model-two")
@@ -138,7 +139,7 @@ async def test_next_turn_uses_a_new_model_and_keeps_the_history(tmp_path, script
     models = [call["model"] for call in completions.calls]
     assert models[0] == "model-one"
     assert models[-1] == "model-two", "the next turn must use the saved model"
-    assert "model-one" not in models[1:], "no request after saving may use the old model"
+    assert "model-one" not in models[requests_before_save:], "no request after saving may use the old model"
     assert agent.model == "model-two"
     # Same endpoint -> the connection is reused, not rebuilt.
     assert agent._openai_client is client_before
@@ -237,6 +238,7 @@ async def test_saved_settings_reach_the_next_turn_over_http(tmp_path, scripted_m
         # A deployment-level override wins over the stored file (CONTRACTS.md
         # section 2), so drop it to exercise the ordinary "user saves settings"
         # path.
+        requests_before_save = len(created[0].chat.completions.calls)
         monkeypatch.delenv("MELLOWDAY_MODEL")
         saved = await client.put("/api/config", json={"model": "model-two"})
         assert saved.status_code == 200
@@ -256,7 +258,7 @@ async def test_saved_settings_reach_the_next_turn_over_http(tmp_path, scripted_m
     models = [call["model"] for call in created[0].chat.completions.calls]
     assert models[0] == "model-one"
     assert models[-1] == "model-two"
-    assert "model-one" not in models[1:]
+    assert "model-one" not in models[requests_before_save:]
     assert len(created) == 1, "the same endpoint keeps the same connection"
 
 

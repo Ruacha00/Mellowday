@@ -7,6 +7,7 @@ uses. The bundled static page is a thin client for exactly those endpoints.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -26,6 +27,21 @@ def create_app(*, store: Store | None = None, registry: service.SessionRegistry 
     app = FastAPI(title="MellowDay", version="0.1.0")
     app.state.store = store if store is not None else Store()
     app.state.registry = registry if registry is not None else service.SessionRegistry(store=app.state.store)
+    from mellowday.web_app.persona_routes import router as persona_router
+    app.include_router(persona_router)
+    from mellowday.web_app.calendar_routes import create_router as calendar_router
+    app.include_router(calendar_router(app.state.registry.schedule))
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        from mellowday.personal_assistant.default_skills import install_calendar_method
+        install_calendar_method()
+        await app.state.registry.schedule.start()
+        try:
+            yield
+        finally:
+            await app.state.registry.schedule.stop()
+    app.router.lifespan_context = lifespan
 
     # ------------------------------------------------------------- meta
 
@@ -119,6 +135,8 @@ def create_app(*, store: Store | None = None, registry: service.SessionRegistry 
             state.agent.abort()
         except Exception:
             pass
+        if state.current_task is not None and not state.current_task.done():
+            state.current_task.cancel()
         return {"ok": True}
 
     # -------------------------------------------------------- sessions

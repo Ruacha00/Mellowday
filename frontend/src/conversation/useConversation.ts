@@ -1,4 +1,5 @@
 import { computed, ref } from "vue";
+import { openCalendar } from "../calendar/calendarState";
 import { errorMessage, requestJson } from "../api/http";
 import type {
   ChatMessage,
@@ -136,6 +137,12 @@ export function createConversation() {
         streamSession,
         text,
         (event) => {
+          if (event.type === "calendar_open") {
+            openCalendar(
+              typeof event.event_id === "string" ? event.event_id : undefined,
+              typeof event.date === "string" ? event.date : undefined,
+            );
+          }
           if (event.type === "session") {
             if (
               !event.session_id ||

@@ -40,3 +40,5 @@ P1–P4 已取得当前运行代码的真实模型及进程/浏览器证据；P5
 - 失败先修复本批，不无限重试；不得将离线测试写成真实模型通过。
 
 进度与证据见 [../issues/BOARD.md](../issues/BOARD.md) 与 [../evidence/](../evidence/)。内部源码对应与交接记录存于被忽略的 `.local-planning/`。
+
+当前聊天优先范围见 [S18](S18-chat-first-product-scope.md)，实施规格 S19–S22，依赖及验收见 [CF 任务板](../issues/CHAT-FIRST-BOARD.md)。旧范围冲突处以 S18 为准。

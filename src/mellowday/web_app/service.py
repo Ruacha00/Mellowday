@@ -41,6 +41,7 @@ import logging
 import re
 import time
 import uuid
+from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable
@@ -308,6 +309,7 @@ class SessionState:
     #: Highest turn number already written to the raw execution record. It is
     #: seeded from that file, so numbering keeps counting across a restart.
     turn_seq: int = 0
+    memory_turn: Any = None
 
 
 class SessionRegistry:
@@ -325,6 +327,8 @@ class SessionRegistry:
         self._sessions: dict[str, SessionState] = {}
         self._dir = sessions_dir or paths.sessions_dir()
         self._dir.mkdir(parents=True, exist_ok=True)
+        from mellowday.personal_assistant.schedule import ScheduleService
+        self.schedule = ScheduleService(self.store, session_exists=self.exists)
 
     # ---------------------------------------------------------------- agents
 
@@ -337,6 +341,24 @@ class SessionRegistry:
         from mellowday.personal_assistant.tools import execute_tool
 
         return await execute_tool(self.store, name, arguments)
+
+    async def _session_tool_executor(self, state: SessionState, name: str, arguments: dict) -> str:
+        if state.dropped:
+            return json.dumps({"ok": False, "error": "session_deleted"})
+        if name == "remember_fact":
+            if state.memory_turn is None:
+                return json.dumps({"ok": False, "error": "no_active_memory_turn"})
+            # Never trust the main model's proposed content: it has history.
+            # The separate evaluator sees only this turn's original user text.
+            return json.dumps(await state.memory_turn.process(), ensure_ascii=False)
+        if name in {"update_memory", "forget_memory"}:
+            return json.dumps({"ok": False, "error": "settings_only",
+                               "message": "请在设置中的记忆管理修改或删除条目。"}, ensure_ascii=False)
+        from mellowday.personal_assistant import schedule_tools
+        if name in {t["name"] for t in schedule_tools.tool_definitions()}:
+            return await schedule_tools.execute_tool(self.schedule, name, arguments,
+                                                     session_id=state.session_id, emit=events.emit)
+        return await self._tool_executor(name, arguments)
 
     def get(self, session_id: str | None) -> SessionState:
         """Return the session for session_id, creating it when needed.
@@ -355,7 +377,7 @@ class SessionRegistry:
         state.agent = self._factory()(
             session_id=sid,
             store=self.store,
-            tool_executor=self._tool_executor,
+            tool_executor=lambda name, arguments: self._session_tool_executor(state, name, arguments),
         )
         state.title = self._load_history_title(sid)
         self._sessions[sid] = state
@@ -383,6 +405,7 @@ class SessionRegistry:
         """
         sid = validate_session_id(session_id)
         state = self._sessions.pop(sid, None)
+        self.schedule.pause_session(sid)
         removed = state is not None
         if state is not None:
             self._stop_turn(state)
@@ -553,9 +576,21 @@ class SessionRegistry:
         """
         sid = validate_session_id(session_id)
         trace = session_store.read_trace(sid)
+        messages = self._read_history(sid)
+        # Durable outbox is authoritative; project reports into the history view
+        # instead of dual-writing files and risking duplicates after a restart.
+        if self.exists(sid):
+            for report in self.schedule.reports_for_session(sid):
+                stamp = datetime.fromisoformat(report["created_at"]).timestamp()
+                messages.append({"role": "assistant", "content": report["body"], "ts": stamp,
+                                 "notification_id": report["id"]})
+                trace.append(session_store.trace_record("assistant", text=report["body"],
+                    ts=stamp, time=report["created_at"], notification_id=report["id"]))
+            messages.sort(key=lambda item: item.get("ts", 0))
+            trace.sort(key=lambda item: item.get("ts", 0))
         return {
             "session_id": sid,
-            "messages": self._read_history(sid),
+            "messages": messages,
             "trace": trace,
             "trace_display": session_store.trace_for_display(trace),
             "active": sid in self._sessions,
@@ -699,7 +734,7 @@ class SessionRegistry:
                 )
                 try:
                     return await asyncio.wait_for(future, timeout=timeout)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
+                except asyncio.TimeoutError:
                     return False
 
             state.updated_at = time.time()
@@ -710,10 +745,31 @@ class SessionRegistry:
             if warning:
                 sink({"type": "warning", "message": warning})
 
+            from mellowday.personal_assistant.turn_memory import TurnMemory
+            query_builder = getattr(state.agent, "_build_side_query", None)
+            side_query = query_builder(max_tokens=1200) if callable(query_builder) else None
+            state.memory_turn = TurnMemory(self.store, state.session_id, turn, answer, side_query, confirm)
+            reports = self.schedule.reports_for_session(state.session_id)[-3:]
+            state.agent._scheduled_report_context = json.dumps(
+                [{"sent_at": r["created_at"], "body": r["body"]} for r in reports], ensure_ascii=False) if reports else ""
+
             async def run() -> str | None:
                 token = events.set_sink(sink)
                 try:
                     result = await self._invoke(state, answer)
+                    if result is None and not state.dropped and not getattr(state.agent, "_aborted", False):
+                        memory = await state.memory_turn.process()
+                        if memory.get("ok"):
+                            sink({"type": "notice", "message": memory.get("message", "已更新记忆。"),
+                                  "operation_id": memory.get("operation_id")})
+                        if side_query is not None and not state.dropped and not getattr(state.agent, "_aborted", False):
+                            from mellowday.personal_assistant.persona_adaptation import adapt_turn
+                            try:
+                                await adapt_turn(state.session_id, str(turn), answer, side_query)
+                            except asyncio.CancelledError:
+                                raise
+                            except Exception:
+                                logger.warning("Persona adaptation failed; previous version retained")
                     # The learning loop writes *after* the model is done, and it
                     # asks the user first. Reaping it here - while the sink, the
                     # channel and the confirmation broker are all still alive -
@@ -744,6 +800,7 @@ class SessionRegistry:
             finally:
                 await self._reap_runner(runner, agent=state.agent)
                 state.current_task = None
+                state.memory_turn = None
                 state.confirmations.cancel_all()
                 # The committed reply is mirrored into the raw record from the
                 # same call that writes the display history: one write point,
@@ -925,6 +982,7 @@ def build_agent(
 ) -> Any:
     """Construct a runtime agent for one web session."""
     from mellowday.personal_assistant.tools import build_fact_provider, tool_definitions
+    from mellowday.personal_assistant.schedule_tools import tool_definitions as calendar_tools
     from mellowday.runtime.agent import Agent
     from mellowday.runtime.sessions import load_session
 
@@ -936,7 +994,10 @@ def build_agent(
         api_key=cfg.api_key or None,
         thinking=cfg.thinking,
         max_turns=cfg.max_turns,
-        custom_tools=tool_definitions(),
+        custom_tools=[t for t in tool_definitions() if t["name"] not in {
+            "update_memory", "forget_memory", "create_calendar_event", "update_calendar_event", "delete_calendar_event",
+        }] + calendar_tools(),
+        product_mode=True,
         tool_executor=tool_executor,
         # Facts come from the same SQLite store the business tools write to, so
         # "the assistant remembered it" and "the assistant used it" cannot drift

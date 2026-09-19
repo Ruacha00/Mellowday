@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   computed,
+  defineAsyncComponent,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -10,6 +11,11 @@ import {
 import { useRoute, useRouter } from "vue-router";
 import { useAppearance } from "./appearance/useAppearance";
 import { useConversation } from "./conversation/useConversation";
+const CalendarDrawer = defineAsyncComponent(
+  () => import("./calendar/CalendarDrawer.vue"),
+);
+import NotificationBubbles from "./calendar/NotificationBubbles.vue";
+import { calendarOpen, openCalendar } from "./calendar/calendarState";
 const route = useRoute();
 const router = useRouter();
 const { theme } = useAppearance();
@@ -43,31 +49,21 @@ const menuButton = ref<HTMLButtonElement>();
 const drawer = ref<HTMLElement>();
 const primary = [
   ["/conversation", "◯", "对话"],
-  ["/today", "▦", "今日"],
-  ["/life/tasks", "♧", "生活"],
-  ["/memory", "◇", "记忆"],
-  ["/settings/appearance", "✥", "设置"],
-];
-const life = [
-  ["/life/tasks", "任务"],
-  ["/life/reminders", "提醒"],
-  ["/life/calendar", "日历"],
-  ["/life/notes", "笔记"],
+  ["/settings/persona", "✥", "设置"],
 ];
 const settings = [
-  ["/settings/appearance", "外观"],
-  ["/settings/persona", "人格与陪伴"],
+  ["/settings/persona", "人格"],
+  ["/settings/memory", "记忆"],
+  ["/settings/skills", "已学会的方法"],
+  ["/settings/tasks", "任务"],
+  ["/settings/notes", "笔记"],
   ["/settings/providers", "模型"],
-  ["/settings/skills", "习惯与技能"],
+  ["/settings/appearance", "外观"],
   ["/settings/history", "对话历史"],
   ["/settings/diagnostics", "运行状态"],
 ];
 const secondary = computed(() =>
-  route.path.startsWith("/life")
-    ? life
-    : route.path.startsWith("/settings")
-      ? settings
-      : [],
+  route.path.startsWith("/settings") ? settings : [],
 );
 function active(path: string) {
   return path.startsWith("/life")
@@ -131,8 +127,9 @@ watch(
   () => {
     ++navigationRevision;
     closeMenu();
+    if (route.query.calendar) openCalendar();
   },
-  { flush: "sync" },
+  { flush: "sync", immediate: true },
 );
 onMounted(() => {
   mobileQuery = window.matchMedia?.("(max-width: 700px)");
@@ -214,6 +211,10 @@ onBeforeUnmount(() => {
           ><span class="nav-icon" aria-hidden="true">{{ icon }}</span
           ><span class="nav-label">{{ label }}</span></RouterLink
         >
+        <button :aria-expanded="calendarOpen" @click="openCalendar()">
+          <span class="nav-icon" aria-hidden="true">▦</span
+          ><span class="nav-label">日历</span>
+        </button>
       </nav>
       <section class="recent-sessions">
         <div class="recent-title">
@@ -291,5 +292,7 @@ onBeforeUnmount(() => {
         </div>
       </RouterView>
     </main>
+    <CalendarDrawer v-if="calendarOpen" />
+    <NotificationBubbles />
   </div>
 </template>

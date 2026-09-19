@@ -107,7 +107,13 @@ function onKeydown(event: KeyboardEvent) {
       class="panel confirmation"
       aria-label="操作确认"
     >
-      <h2>需要你的确认</h2>
+      <h2>
+        {{
+          item.summary.includes("记忆")
+            ? "这件事，要帮你记住吗？"
+            : "需要你的确认"
+        }}
+      </h2>
       <pre>{{ item.summary }}</pre>
       <div
         v-if="item.status === 'pending' || item.status === 'submitting'"

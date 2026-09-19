@@ -107,7 +107,7 @@ class _Script:
 
     @property
     def messages_sent(self) -> list[dict]:
-        return self.calls[-1]["messages"]
+        return next(call["messages"] for call in reversed(self.calls) if call.get("stream"))
 
 
 class _FakeCompletions:

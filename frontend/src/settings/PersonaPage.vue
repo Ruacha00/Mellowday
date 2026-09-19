@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { errorMessage, requestJson } from "../api/http";
 
+import PersonaAdaptation from "./PersonaAdaptation.vue";
 const fields = [
   ["name", "称呼", 80],
   ["identity", "身份", 1200],
@@ -9,6 +10,7 @@ const fields = [
   ["speaking_style", "说话方式", 1200],
   ["relationship", "关系定位", 1200],
   ["boundaries", "交流边界", 1200],
+  ["examples", "说话示例", 1200],
 ] as const;
 type Persona = Record<(typeof fields)[number][0], string>;
 const draft = reactive<Persona>({
@@ -18,6 +20,7 @@ const draft = reactive<Persona>({
   speaking_style: "",
   relationship: "",
   boundaries: "",
+  examples: "",
 });
 const loaded = ref(false);
 const busy = ref(false);
@@ -82,7 +85,7 @@ onBeforeUnmount(() => {
   <section class="page-stack">
     <header class="page-heading">
       <p class="eyebrow">慢慢熟悉彼此</p>
-      <h1>人格与陪伴</h1>
+      <h1>人格</h1>
       <p class="muted">
         设定你希望如何相处，让聊天、倾听和日常帮忙都有熟悉的感觉。
       </p>
@@ -117,11 +120,12 @@ onBeforeUnmount(() => {
         />
       </label>
       <p class="muted small">
-        留空会采用默认设定。聊天风格不会改变操作确认、真实记录或权限；主动问候尚未开放。
+        留空会采用默认设定。聊天风格不会改变操作确认、真实记录或权限。
       </p>
       <button class="button primary" type="submit" :disabled="busy">
         {{ busy ? "保存中…" : "保存人格" }}
       </button>
     </form>
+    <PersonaAdaptation />
   </section>
 </template>

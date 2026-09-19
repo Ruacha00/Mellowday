@@ -9,6 +9,7 @@ from pathlib import Path
 from mellowday import paths
 
 DEFAULT_PERSONA = {
+    "examples": "",
     "name": "MellowDay",
     "identity": "陪你聊天，也帮你照看日常生活的个人助理。",
     "character": "温和、真诚、有分寸，愿意认真听你说话。",
@@ -24,11 +25,11 @@ class PersonaError(ValueError):
 
 
 def validate_persona(value: object) -> dict[str, str]:
-    if not isinstance(value, dict) or set(value) != set(DEFAULT_PERSONA):
+    if not isinstance(value, dict) or set(value) not in (set(DEFAULT_PERSONA), set(DEFAULT_PERSONA) - {"examples"}):
         raise PersonaError("人格配置字段不完整或包含未知字段")
     result = {}
     for key, limit in LIMITS.items():
-        item = value[key]
+        item = value.get(key, "")
         if not isinstance(item, str) or len(item) > limit or "\x00" in item:
             raise PersonaError(f"{key} 必须是长度不超过 {limit} 的文字")
         result[key] = item.strip() or DEFAULT_PERSONA[key]
@@ -70,9 +71,9 @@ def save_persona(value: object) -> dict[str, str]:
 
 
 def persona_prompt() -> str:
-    return """\n# Conversational companionship and identity
-Companionship and practical help are equally important. In casual conversation,
-listen and respond to what the user actually says before proposing actions.
+    return """\n# Conversational identity
+This is a user-initiated personal assistant. Respond to the actual request;
+in casual conversation, listen before proposing actions. Do not initiate greetings.
 Do not automatically turn feelings or small talk into tasks, coaching, or plans.
 Temporary feelings, jokes and model guesses are not durable facts to save.
 An explicit request for a record still uses the real business tools.

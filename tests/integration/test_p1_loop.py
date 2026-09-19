@@ -142,8 +142,9 @@ async def test_tool_result_is_fed_back_to_the_model(tmp_path, scripted_model):
 
     assert len(created) == 1
     completions = created[0].chat.completions
-    assert len(completions.calls) == 2, "one round trip to call the tool, one to answer"
-    second_messages = completions.calls[1]["messages"]
+    main_calls = [call for call in completions.calls if call.get("stream")]
+    assert len(main_calls) == 2, "one streamed round trip to call the tool, one to answer"
+    second_messages = main_calls[1]["messages"]
     tool_messages = [m for m in second_messages if m.get("role") == "tool"]
     assert tool_messages, "the tool result must be sent back to the model"
     payload = json.loads(tool_messages[0]["content"])

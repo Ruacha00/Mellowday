@@ -19,7 +19,9 @@ it("keeps the draft on failure and reports only acknowledged saves", async () =>
     .mockResolvedValueOnce(json({ detail: "保存失败" }, 500))
     .mockResolvedValueOnce(json({ ...persona, name: "小悠" }));
   vi.stubGlobal("fetch", fetcher);
-  const page = mount(PersonaPage);
+  const page = mount(PersonaPage, {
+    global: { stubs: { PersonaAdaptation: true } },
+  });
   await flushPromises();
   await page.get("input").setValue("小悠");
   await page.get("form").trigger("submit");
@@ -37,7 +39,9 @@ it("does not expose a save form when initial load fails", async () => {
     "fetch",
     vi.fn().mockResolvedValue(json({ detail: "配置损坏" }, 409)),
   );
-  const page = mount(PersonaPage);
+  const page = mount(PersonaPage, {
+    global: { stubs: { PersonaAdaptation: true } },
+  });
   await flushPromises();
   expect(page.find("form").exists()).toBe(false);
   expect(page.get('[role="alert"]').text()).toContain("配置损坏");

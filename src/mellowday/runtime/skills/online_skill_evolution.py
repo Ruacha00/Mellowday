@@ -240,6 +240,14 @@ def _write_summary(*, details: list[str], action: str, skill_name: str) -> str:
     return "\n".join(lines)
 
 
+class SkillWriteSummary(str):
+    """Human preview with a separate, untruncated authorization payload."""
+    def __new__(cls, preview: str, complete_change: dict):
+        value = super().__new__(cls, preview)
+        value.complete_change = complete_change
+        return value
+
+
 def _add_write_summary(candidate: OnlineSkillCandidate, source_facts: list[dict[str, Any]] | None = None) -> str:
     """新建技能的确认文本：把实际要写入的规则摊开，而不是只有一句摘要。"""
     details = [
@@ -254,7 +262,8 @@ def _add_write_summary(candidate: OnlineSkillCandidate, source_facts: list[dict[
     if candidate.tags:
         details.append("标签：" + "、".join(str(tag) for tag in candidate.tags))
     details.extend(_migration_summary(candidate, source_facts))
-    return _write_summary(details=details, action="add", skill_name=candidate.name)
+    return SkillWriteSummary(_write_summary(details=details, action="add", skill_name=candidate.name),
+                             {"action": "add", "candidate": asdict(candidate)})
 
 
 def _merge_write_summary(*, target_skill: str, plan: dict[str, Any], candidate: OnlineSkillCandidate,
@@ -284,7 +293,8 @@ def _merge_write_summary(*, target_skill: str, plan: dict[str, Any], candidate: 
         details.append(f"仍然保留的旧规则（{len(merge['kept'])} 条）：")
         details.extend(f"- {_preview_rule(unit)}" for unit in merge["kept"][:8])
     details.extend(_migration_summary(candidate, source_facts))
-    return _write_summary(details=details, action="merge", skill_name=target_skill)
+    return SkillWriteSummary(_write_summary(details=details, action="merge", skill_name=target_skill),
+                             {"action": "merge", "candidate": asdict(candidate), "plan": plan})
 
 
 def _read_skill_meta(skill: Any) -> dict[str, str]:

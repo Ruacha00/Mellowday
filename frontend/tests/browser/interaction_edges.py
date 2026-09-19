@@ -47,10 +47,9 @@ with sync_playwright() as pw:
     expect(draft).to_have_value('错误')
     checks.append('runtime error is visible and failed draft is retained')
     page.goto(url + '/#/today')
-    expect(page.get_by_role('heading', name='今天，慢慢来。', exact=True)).to_be_visible()
-    expect(page.get_by_role('button', name='刷新', exact=True)).to_be_enabled()
+    expect(page.get_by_role('heading', name='与 MellowDay 聊聊', exact=True)).to_be_visible()
     expect(page.get_by_role('alert')).to_have_count(0)
-    checks.append('today route renders through production proxy')
+    checks.append('legacy today route redirects to conversation through production proxy')
     browser.close()
 result = {'ok': True, 'checks': checks}
 args.output.parent.mkdir(parents=True, exist_ok=True)
