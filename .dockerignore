@@ -16,6 +16,7 @@
 .gitignore
 .idea/
 .vscode/
+.gitnexus/
 
 # Personal runtime state: sessions, skills, memories, sqlite, traces, logs.
 # Copying this into an image would ship the developer's own assistant data.
@@ -48,3 +49,4 @@ docs/
 evals/
 scripts/
 .local-planning/
+frontend/

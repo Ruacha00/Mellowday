@@ -10,11 +10,11 @@
 name: mellowday
 
 services:
-  web:
+  api:
     build:
       context: .
       target: production
-    image: mellowday:local
+    image: ${MELLOWDAY_API_IMAGE:-mellowday-api:local}
     # Optional: a missing .env is not an error, an unconfigured model still
     # serves the management page and answers chat with a clear config error.
     env_file:
@@ -38,11 +38,20 @@ services:
       # such a request is stored as 09:00Z and the browser then renders it as
       # 17:00 for a reader in UTC+8. Override with TZ=... for another zone.
       TZ: ${TZ:-Asia/Shanghai}
-    ports:
-      # Loopback only: the app has no authentication of its own.
-      - "127.0.0.1:${MELLOWDAY_WEB_PORT:-8021}:8000"
     volumes:
       - mellowday-data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    image: ${MELLOWDAY_FRONTEND_IMAGE:-mellowday-frontend:local}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MELLOWDAY_WEB_PORT:-8021}:80"
     restart: unless-stopped
 
 volumes:

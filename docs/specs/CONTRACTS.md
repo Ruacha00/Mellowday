@@ -13,6 +13,7 @@
 
 - `ModelConfig(api_key, api_base, model, thinking, max_turns)`；环境变量 `MELLOWDAY_API_KEY`、`MELLOWDAY_API_BASE`、`MELLOWDAY_MODEL` 覆盖文件配置。
 - `load_model_config()`、`save_model_config(cfg)`、`update_model_config(**changes)`；`ModelConfig.public()` 不含明文密钥。
+- `PUT /api/config` 显式 `max_turns:null` 清除保存的工具轮次限制；省略字段不修改。空 `api_key` 表示保留现有凭据，其余字段的 null 不覆盖已保存值；响应反映环境覆盖后的有效配置。
 - 无凭据时管理页仍可用，聊天必须返回明确的配置错误事件而不是静默失败。
 
 ## 3. 事件桥（`mellowday/runtime/events.py`，已完成）

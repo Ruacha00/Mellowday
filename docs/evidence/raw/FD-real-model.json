@@ -1,0 +1,1475 @@
+{
+  "initial_three_turns": {
+    "ok": true,
+    "scope": "real model through Nginx; task persistence and requested learning observed",
+    "turns": [
+      {
+        "message": "请创建一条待办，标题为“前端部署验收1789793178”，备注为“隔离测试数据”，然后告诉我结果。",
+        "session_id": "fd-model-1789793178",
+        "events": [
+          {
+            "type": "session",
+            "session_id": "fd-model-1789793178"
+          },
+          {
+            "type": "busy_start",
+            "label": "Thinking"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "tool_start",
+            "name": "create_todo",
+            "arguments": {
+              "title": "前端部署验收1789793178",
+              "detail": "隔离测试数据"
+            }
+          },
+          {
+            "type": "tool_result",
+            "name": "create_todo",
+            "result": "{\"ok\": true, \"id\": \"13413339541f43b5a9f97ec4b2455303\", \"operation_id\": \"op_b684efbb97454014927e3879c3d4c086\", \"record\": {\"id\": \"13413339541f43b5a9f97ec4b2455303\", \"kind\": \"todos\", \"title\": \"前端部署验收1789793178\", \"detail\": \"隔离测试数据\", \"due_at\": null, \"status\": \"open\", \"created_at\": \"2026-09-19T04:46:22.840985+00:00\", \"updated_at\": \"2026-09-19T04:46:22.840985+00:00\", \"source\": null, \"meta\": {}}}"
+          },
+          {
+            "type": "busy_start",
+            "label": "Thinking"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "text_delta",
+            "text": "\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "已"
+          },
+          {
+            "type": "text_delta",
+            "text": "创建"
+          },
+          {
+            "type": "text_delta",
+            "text": "待"
+          },
+          {
+            "type": "text_delta",
+            "text": "办"
+          },
+          {
+            "type": "text_delta",
+            "text": "：\n\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "-"
+          },
+          {
+            "type": "text_delta",
+            "text": " "
+          },
+          {
+            "type": "text_delta",
+            "text": "标题"
+          },
+          {
+            "type": "text_delta",
+            "text": "："
+          },
+          {
+            "type": "text_delta",
+            "text": "前端"
+          },
+          {
+            "type": "text_delta",
+            "text": "部署"
+          },
+          {
+            "type": "text_delta",
+            "text": "验收"
+          },
+          {
+            "type": "text_delta",
+            "text": "178"
+          },
+          {
+            "type": "text_delta",
+            "text": "979"
+          },
+          {
+            "type": "text_delta",
+            "text": "317"
+          },
+          {
+            "type": "text_delta",
+            "text": "8"
+          },
+          {
+            "type": "text_delta",
+            "text": "\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "-"
+          },
+          {
+            "type": "text_delta",
+            "text": " "
+          },
+          {
+            "type": "text_delta",
+            "text": "备注"
+          },
+          {
+            "type": "text_delta",
+            "text": "："
+          },
+          {
+            "type": "text_delta",
+            "text": "隔离"
+          },
+          {
+            "type": "text_delta",
+            "text": "测试"
+          },
+          {
+            "type": "text_delta",
+            "text": "数据"
+          },
+          {
+            "type": "text_delta",
+            "text": "\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "-"
+          },
+          {
+            "type": "text_delta",
+            "text": " "
+          },
+          {
+            "type": "text_delta",
+            "text": "状态"
+          },
+          {
+            "type": "text_delta",
+            "text": "："
+          },
+          {
+            "type": "text_delta",
+            "text": "未"
+          },
+          {
+            "type": "text_delta",
+            "text": "完成"
+          },
+          {
+            "type": "text_delta",
+            "text": "（"
+          },
+          {
+            "type": "text_delta",
+            "text": "open"
+          },
+          {
+            "type": "text_delta",
+            "text": "）"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "token_usage",
+            "input": 12562,
+            "output": 136
+          },
+          {
+            "type": "turn_end"
+          },
+          {
+            "type": "done",
+            "session_id": "fd-model-1789793178"
+          }
+        ]
+      },
+      {
+        "message": "请记住长期规则：以后帮我整理待办时，先列明日固定日程，再列恰好三个重点，并在末尾写“留一点空白”。这是长期工作习惯，不是一次性要求；请保存为技能，必要时向我确认。",
+        "session_id": "fd-model-1789793178",
+        "events": [
+          {
+            "type": "session",
+            "session_id": "fd-model-1789793178"
+          },
+          {
+            "type": "busy_start",
+            "label": "Thinking"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "text_delta",
+            "text": "\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "我"
+          },
+          {
+            "type": "text_delta",
+            "text": "目前"
+          },
+          {
+            "type": "text_delta",
+            "text": "这个"
+          },
+          {
+            "type": "text_delta",
+            "text": "会话"
+          },
+          {
+            "type": "text_delta",
+            "text": "里"
+          },
+          {
+            "type": "text_delta",
+            "text": "没有"
+          },
+          {
+            "type": "text_delta",
+            "text": "可"
+          },
+          {
+            "type": "text_delta",
+            "text": "用的"
+          },
+          {
+            "type": "text_delta",
+            "text": "“"
+          },
+          {
+            "type": "text_delta",
+            "text": "技能"
+          },
+          {
+            "type": "text_delta",
+            "text": "”"
+          },
+          {
+            "type": "text_delta",
+            "text": "创建"
+          },
+          {
+            "type": "text_delta",
+            "text": "工具"
+          },
+          {
+            "type": "text_delta",
+            "text": "，"
+          },
+          {
+            "type": "text_delta",
+            "text": "所以"
+          },
+          {
+            "type": "text_delta",
+            "text": "无法"
+          },
+          {
+            "type": "text_delta",
+            "text": "真正"
+          },
+          {
+            "type": "text_delta",
+            "text": "把"
+          },
+          {
+            "type": "text_delta",
+            "text": "这条"
+          },
+          {
+            "type": "text_delta",
+            "text": "规则"
+          },
+          {
+            "type": "text_delta",
+            "text": "保存"
+          },
+          {
+            "type": "text_delta",
+            "text": "为"
+          },
+          {
+            "type": "text_delta",
+            "text": "技能"
+          },
+          {
+            "type": "text_delta",
+            "text": "；"
+          },
+          {
+            "type": "text_delta",
+            "text": "同时"
+          },
+          {
+            "type": "text_delta",
+            "text": "按"
+          },
+          {
+            "type": "text_delta",
+            "text": "规则"
+          },
+          {
+            "type": "text_delta",
+            "text": "我也不"
+          },
+          {
+            "type": "text_delta",
+            "text": "该"
+          },
+          {
+            "type": "text_delta",
+            "text": "把它"
+          },
+          {
+            "type": "text_delta",
+            "text": "存"
+          },
+          {
+            "type": "text_delta",
+            "text": "成"
+          },
+          {
+            "type": "text_delta",
+            "text": "“"
+          },
+          {
+            "type": "text_delta",
+            "text": "事实"
+          },
+          {
+            "type": "text_delta",
+            "text": "/"
+          },
+          {
+            "type": "text_delta",
+            "text": "偏好"
+          },
+          {
+            "type": "text_delta",
+            "text": "”（"
+          },
+          {
+            "type": "text_delta",
+            "text": "那是"
+          },
+          {
+            "type": "text_delta",
+            "text": "用来"
+          },
+          {
+            "type": "text_delta",
+            "text": "记"
+          },
+          {
+            "type": "text_delta",
+            "text": "客观"
+          },
+          {
+            "type": "text_delta",
+            "text": "信息和"
+          },
+          {
+            "type": "text_delta",
+            "text": "口味"
+          },
+          {
+            "type": "text_delta",
+            "text": "偏"
+          },
+          {
+            "type": "text_delta",
+            "text": "好的"
+          },
+          {
+            "type": "text_delta",
+            "text": "，"
+          },
+          {
+            "type": "text_delta",
+            "text": "不能"
+          },
+          {
+            "type": "text_delta",
+            "text": "用来"
+          },
+          {
+            "type": "text_delta",
+            "text": "存"
+          },
+          {
+            "type": "text_delta",
+            "text": "“"
+          },
+          {
+            "type": "text_delta",
+            "text": "如何"
+          },
+          {
+            "type": "text_delta",
+            "text": "执行"
+          },
+          {
+            "type": "text_delta",
+            "text": "任务"
+          },
+          {
+            "type": "text_delta",
+            "text": "”"
+          },
+          {
+            "type": "text_delta",
+            "text": "的"
+          },
+          {
+            "type": "text_delta",
+            "text": "流程"
+          },
+          {
+            "type": "text_delta",
+            "text": "）。\n\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "所以"
+          },
+          {
+            "type": "text_delta",
+            "text": "现在"
+          },
+          {
+            "type": "text_delta",
+            "text": "这条"
+          },
+          {
+            "type": "text_delta",
+            "text": "长期"
+          },
+          {
+            "type": "text_delta",
+            "text": "工作"
+          },
+          {
+            "type": "text_delta",
+            "text": "习惯"
+          },
+          {
+            "type": "text_delta",
+            "text": "我"
+          },
+          {
+            "type": "text_delta",
+            "text": "**"
+          },
+          {
+            "type": "text_delta",
+            "text": "还没有"
+          },
+          {
+            "type": "text_delta",
+            "text": "保存"
+          },
+          {
+            "type": "text_delta",
+            "text": "成功"
+          },
+          {
+            "type": "text_delta",
+            "text": "**"
+          },
+          {
+            "type": "text_delta",
+            "text": "。"
+          },
+          {
+            "type": "text_delta",
+            "text": "要"
+          },
+          {
+            "type": "text_delta",
+            "text": "让它"
+          },
+          {
+            "type": "text_delta",
+            "text": "生效"
+          },
+          {
+            "type": "text_delta",
+            "text": "，"
+          },
+          {
+            "type": "text_delta",
+            "text": "可以"
+          },
+          {
+            "type": "text_delta",
+            "text": "这样"
+          },
+          {
+            "type": "text_delta",
+            "text": "：\n\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "-"
+          },
+          {
+            "type": "text_delta",
+            "text": " "
+          },
+          {
+            "type": "text_delta",
+            "text": "等"
+          },
+          {
+            "type": "text_delta",
+            "text": "技能"
+          },
+          {
+            "type": "text_delta",
+            "text": "确认"
+          },
+          {
+            "type": "text_delta",
+            "text": "流程"
+          },
+          {
+            "type": "text_delta",
+            "text": "出现"
+          },
+          {
+            "type": "text_delta",
+            "text": "时"
+          },
+          {
+            "type": "text_delta",
+            "text": "我再"
+          },
+          {
+            "type": "text_delta",
+            "text": "把它"
+          },
+          {
+            "type": "text_delta",
+            "text": "提交"
+          },
+          {
+            "type": "text_delta",
+            "text": "确认"
+          },
+          {
+            "type": "text_delta",
+            "text": "；"
+          },
+          {
+            "type": "text_delta",
+            "text": "或者"
+          },
+          {
+            "type": "text_delta",
+            "text": "\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "-"
+          },
+          {
+            "type": "text_delta",
+            "text": " "
+          },
+          {
+            "type": "text_delta",
+            "text": "你"
+          },
+          {
+            "type": "text_delta",
+            "text": "确认"
+          },
+          {
+            "type": "text_delta",
+            "text": "后"
+          },
+          {
+            "type": "text_delta",
+            "text": "，"
+          },
+          {
+            "type": "text_delta",
+            "text": "我"
+          },
+          {
+            "type": "text_delta",
+            "text": "把它"
+          },
+          {
+            "type": "text_delta",
+            "text": "作为"
+          },
+          {
+            "type": "text_delta",
+            "text": "“"
+          },
+          {
+            "type": "text_delta",
+            "text": "本次"
+          },
+          {
+            "type": "text_delta",
+            "text": "有效"
+          },
+          {
+            "type": "text_delta",
+            "text": "的一次"
+          },
+          {
+            "type": "text_delta",
+            "text": "性"
+          },
+          {
+            "type": "text_delta",
+            "text": "说明"
+          },
+          {
+            "type": "text_delta",
+            "text": "”"
+          },
+          {
+            "type": "text_delta",
+            "text": "先"
+          },
+          {
+            "type": "text_delta",
+            "text": "照"
+          },
+          {
+            "type": "text_delta",
+            "text": "做"
+          },
+          {
+            "type": "text_delta",
+            "text": "，"
+          },
+          {
+            "type": "text_delta",
+            "text": "但不"
+          },
+          {
+            "type": "text_delta",
+            "text": "做"
+          },
+          {
+            "type": "text_delta",
+            "text": "长期"
+          },
+          {
+            "type": "text_delta",
+            "text": "存储"
+          },
+          {
+            "type": "text_delta",
+            "text": "。\n\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "你"
+          },
+          {
+            "type": "text_delta",
+            "text": "希望"
+          },
+          {
+            "type": "text_delta",
+            "text": "我现在"
+          },
+          {
+            "type": "text_delta",
+            "text": "先用"
+          },
+          {
+            "type": "text_delta",
+            "text": "哪一种"
+          },
+          {
+            "type": "text_delta",
+            "text": "方式"
+          },
+          {
+            "type": "text_delta",
+            "text": "处理"
+          },
+          {
+            "type": "text_delta",
+            "text": "？"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "token_usage",
+            "input": 19045,
+            "output": 1273
+          },
+          {
+            "type": "turn_end"
+          },
+          {
+            "type": "skill_candidate_proposed",
+            "skill": "待办整理格式规则",
+            "action": "add",
+            "summary": "检测到可以记住的新习惯「待办整理格式规则」，写入后只影响之后的新会话。\n用途：整理待办时按固定结构输出：先列明日固定日程，再列恰好三个重点，末尾写“留一点空白”。\n何时使用：每次帮用户整理待办或日程时\n将写入的规则：\n- 按以下顺序组织待办输出：1) 明日固定日程；2) 恰好三个重点；3) 末尾写“留一点空白”。\n标签：待办、输出格式、长期规则\nonline skill evolution: add 待办整理格式规则"
+          },
+          {
+            "type": "confirmation",
+            "id": "4e5563aaa7234fa09447c96d86598ad6",
+            "summary": "检测到可以记住的新习惯「待办整理格式规则」，写入后只影响之后的新会话。\n用途：整理待办时按固定结构输出：先列明日固定日程，再列恰好三个重点，末尾写“留一点空白”。\n何时使用：每次帮用户整理待办或日程时\n将写入的规则：\n- 按以下顺序组织待办输出：1) 明日固定日程；2) 恰好三个重点；3) 末尾写“留一点空白”。\n标签：待办、输出格式、长期规则\nonline skill evolution: add 待办整理格式规则",
+            "session_id": "fd-model-1789793178"
+          },
+          {
+            "type": "skill_candidate_applied",
+            "skill": "待办整理格式规则",
+            "action": "add"
+          },
+          {
+            "type": "notice",
+            "message": "Online skill add: 待办整理格式规则"
+          },
+          {
+            "type": "done",
+            "session_id": "fd-model-1789793178"
+          }
+        ]
+      },
+      {
+        "message": "请根据实际待办，帮我整理接下来的安排。",
+        "session_id": "fd-follow-1789793178",
+        "events": [
+          {
+            "type": "session",
+            "session_id": "fd-follow-1789793178"
+          },
+          {
+            "type": "busy_start",
+            "label": "Thinking"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "tool_start",
+            "name": "list_todos",
+            "arguments": {
+              "status": "open"
+            }
+          },
+          {
+            "type": "tool_start",
+            "name": "list_calendar",
+            "arguments": {
+              "status": "scheduled"
+            }
+          },
+          {
+            "type": "tool_result",
+            "name": "list_todos",
+            "result": "{\"ok\": true, \"kind\": \"todos\", \"count\": 1, \"records\": [{\"id\": \"13413339541f43b5a9f97ec4b2455303\", \"kind\": \"todos\", \"title\": \"前端部署验收1789793178\", \"detail\": \"隔离测试数据\", \"due_at\": null, \"status\": \"open\", \"created_at\": \"2026-09-19T04:46:22.840985+00:00\", \"updated_at\": \"2026-09-19T04:46:22.840985+00:00\", \"source\": null, \"meta\": {}}], \"status_filter\": {\"requested\": \"open\", \"applied\": \"not-done\"}}"
+          },
+          {
+            "type": "tool_result",
+            "name": "list_calendar",
+            "result": "{\"ok\": true, \"kind\": \"calendar\", \"count\": 0, \"records\": [], \"status_filter\": {\"requested\": \"scheduled\", \"applied\": \"scheduled\"}}"
+          },
+          {
+            "type": "busy_start",
+            "label": "Thinking"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "tool_start",
+            "name": "list_reminders",
+            "arguments": {
+              "status": "scheduled"
+            }
+          },
+          {
+            "type": "tool_result",
+            "name": "list_reminders",
+            "result": "{\"ok\": true, \"kind\": \"reminders\", \"count\": 0, \"records\": [], \"status_filter\": {\"requested\": \"scheduled\", \"applied\": \"scheduled\"}}"
+          },
+          {
+            "type": "busy_start",
+            "label": "Thinking"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "text_delta",
+            "text": "\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "按"
+          },
+          {
+            "type": "text_delta",
+            "text": "整理"
+          },
+          {
+            "type": "text_delta",
+            "text": "格式"
+          },
+          {
+            "type": "text_delta",
+            "text": "给你"
+          },
+          {
+            "type": "text_delta",
+            "text": "排"
+          },
+          {
+            "type": "text_delta",
+            "text": "好了"
+          },
+          {
+            "type": "text_delta",
+            "text": "（"
+          },
+          {
+            "type": "text_delta",
+            "text": "基于"
+          },
+          {
+            "type": "text_delta",
+            "text": "当前"
+          },
+          {
+            "type": "text_delta",
+            "text": "实际"
+          },
+          {
+            "type": "text_delta",
+            "text": "记录"
+          },
+          {
+            "type": "text_delta",
+            "text": "）：\n\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "**"
+          },
+          {
+            "type": "text_delta",
+            "text": "明日"
+          },
+          {
+            "type": "text_delta",
+            "text": "（"
+          },
+          {
+            "type": "text_delta",
+            "text": "周日"
+          },
+          {
+            "type": "text_delta",
+            "text": " "
+          },
+          {
+            "type": "text_delta",
+            "text": "9"
+          },
+          {
+            "type": "text_delta",
+            "text": "/"
+          },
+          {
+            "type": "text_delta",
+            "text": "20"
+          },
+          {
+            "type": "text_delta",
+            "text": "）"
+          },
+          {
+            "type": "text_delta",
+            "text": "固定"
+          },
+          {
+            "type": "text_delta",
+            "text": "日程"
+          },
+          {
+            "type": "text_delta",
+            "text": "**\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "暂无"
+          },
+          {
+            "type": "text_delta",
+            "text": "已"
+          },
+          {
+            "type": "text_delta",
+            "text": "记录的"
+          },
+          {
+            "type": "text_delta",
+            "text": "固定"
+          },
+          {
+            "type": "text_delta",
+            "text": "日程"
+          },
+          {
+            "type": "text_delta",
+            "text": "。\n\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "**"
+          },
+          {
+            "type": "text_delta",
+            "text": "三个"
+          },
+          {
+            "type": "text_delta",
+            "text": "重点"
+          },
+          {
+            "type": "text_delta",
+            "text": "**\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "1"
+          },
+          {
+            "type": "text_delta",
+            "text": "."
+          },
+          {
+            "type": "text_delta",
+            "text": " "
+          },
+          {
+            "type": "text_delta",
+            "text": "前端"
+          },
+          {
+            "type": "text_delta",
+            "text": "部署"
+          },
+          {
+            "type": "text_delta",
+            "text": "验收"
+          },
+          {
+            "type": "text_delta",
+            "text": " ——"
+          },
+          {
+            "type": "text_delta",
+            "text": " "
+          },
+          {
+            "type": "text_delta",
+            "text": "隔离"
+          },
+          {
+            "type": "text_delta",
+            "text": "测试"
+          },
+          {
+            "type": "text_delta",
+            "text": "数据"
+          },
+          {
+            "type": "text_delta",
+            "text": "（"
+          },
+          {
+            "type": "text_delta",
+            "text": "唯一"
+          },
+          {
+            "type": "text_delta",
+            "text": "一条"
+          },
+          {
+            "type": "text_delta",
+            "text": "未"
+          },
+          {
+            "type": "text_delta",
+            "text": "完成"
+          },
+          {
+            "type": "text_delta",
+            "text": "待"
+          },
+          {
+            "type": "text_delta",
+            "text": "办"
+          },
+          {
+            "type": "text_delta",
+            "text": "）\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "2"
+          },
+          {
+            "type": "text_delta",
+            "text": "."
+          },
+          {
+            "type": "text_delta",
+            "text": " （"
+          },
+          {
+            "type": "text_delta",
+            "text": "无"
+          },
+          {
+            "type": "text_delta",
+            "text": "其他"
+          },
+          {
+            "type": "text_delta",
+            "text": "待"
+          },
+          {
+            "type": "text_delta",
+            "text": "办"
+          },
+          {
+            "type": "text_delta",
+            "text": "记录"
+          },
+          {
+            "type": "text_delta",
+            "text": "）\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "3"
+          },
+          {
+            "type": "text_delta",
+            "text": "."
+          },
+          {
+            "type": "text_delta",
+            "text": " （"
+          },
+          {
+            "type": "text_delta",
+            "text": "无"
+          },
+          {
+            "type": "text_delta",
+            "text": "其他"
+          },
+          {
+            "type": "text_delta",
+            "text": "待"
+          },
+          {
+            "type": "text_delta",
+            "text": "办"
+          },
+          {
+            "type": "text_delta",
+            "text": "记录"
+          },
+          {
+            "type": "text_delta",
+            "text": "）\n\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "留"
+          },
+          {
+            "type": "text_delta",
+            "text": "一点"
+          },
+          {
+            "type": "text_delta",
+            "text": "空白"
+          },
+          {
+            "type": "text_delta",
+            "text": "\n\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "---\n"
+          },
+          {
+            "type": "text_delta",
+            "text": "补充"
+          },
+          {
+            "type": "text_delta",
+            "text": "："
+          },
+          {
+            "type": "text_delta",
+            "text": "目前"
+          },
+          {
+            "type": "text_delta",
+            "text": "你的"
+          },
+          {
+            "type": "text_delta",
+            "text": "日历"
+          },
+          {
+            "type": "text_delta",
+            "text": "和"
+          },
+          {
+            "type": "text_delta",
+            "text": "提醒"
+          },
+          {
+            "type": "text_delta",
+            "text": "都是"
+          },
+          {
+            "type": "text_delta",
+            "text": "空的"
+          },
+          {
+            "type": "text_delta",
+            "text": "，"
+          },
+          {
+            "type": "text_delta",
+            "text": "待"
+          },
+          {
+            "type": "text_delta",
+            "text": "办"
+          },
+          {
+            "type": "text_delta",
+            "text": "也"
+          },
+          {
+            "type": "text_delta",
+            "text": "只剩"
+          },
+          {
+            "type": "text_delta",
+            "text": "这一"
+          },
+          {
+            "type": "text_delta",
+            "text": "条"
+          },
+          {
+            "type": "text_delta",
+            "text": "「"
+          },
+          {
+            "type": "text_delta",
+            "text": "前端"
+          },
+          {
+            "type": "text_delta",
+            "text": "部署"
+          },
+          {
+            "type": "text_delta",
+            "text": "验收"
+          },
+          {
+            "type": "text_delta",
+            "text": "」，"
+          },
+          {
+            "type": "text_delta",
+            "text": "且"
+          },
+          {
+            "type": "text_delta",
+            "text": "没有"
+          },
+          {
+            "type": "text_delta",
+            "text": "设"
+          },
+          {
+            "type": "text_delta",
+            "text": "截止"
+          },
+          {
+            "type": "text_delta",
+            "text": "时间"
+          },
+          {
+            "type": "text_delta",
+            "text": "。"
+          },
+          {
+            "type": "text_delta",
+            "text": "需要"
+          },
+          {
+            "type": "text_delta",
+            "text": "的话"
+          },
+          {
+            "type": "text_delta",
+            "text": "我可以"
+          },
+          {
+            "type": "text_delta",
+            "text": "帮你"
+          },
+          {
+            "type": "text_delta",
+            "text": "补"
+          },
+          {
+            "type": "text_delta",
+            "text": "上"
+          },
+          {
+            "type": "text_delta",
+            "text": "时间"
+          },
+          {
+            "type": "text_delta",
+            "text": "或"
+          },
+          {
+            "type": "text_delta",
+            "text": "拆"
+          },
+          {
+            "type": "text_delta",
+            "text": "成"
+          },
+          {
+            "type": "text_delta",
+            "text": "几个"
+          },
+          {
+            "type": "text_delta",
+            "text": "可"
+          },
+          {
+            "type": "text_delta",
+            "text": "执行"
+          },
+          {
+            "type": "text_delta",
+            "text": "的小"
+          },
+          {
+            "type": "text_delta",
+            "text": "步骤"
+          },
+          {
+            "type": "text_delta",
+            "text": "。"
+          },
+          {
+            "type": "busy_end"
+          },
+          {
+            "type": "token_usage",
+            "input": 20163,
+            "output": 1075
+          },
+          {
+            "type": "turn_end"
+          },
+          {
+            "type": "done",
+            "session_id": "fd-follow-1789793178"
+          }
+        ]
+      }
+    ],
+    "skills": {
+      "skills": [
+        {
+          "name": "待办整理格式规则",
+          "description": "整理待办时按固定结构输出：先列明日固定日程，再列恰好三个重点，末尾写“留一点空白”。",
+          "version": "0.1.0",
+          "enabled": true,
+          "source": "project",
+          "path": "/app/data/skills/待办整理格式规则/SKILL.md",
+          "skill_dir": "/app/data/skills/待办整理格式规则",
+          "archived_to": "",
+          "updated_at": "2026-09-19T04:46:46Z"
+        }
+      ]
+    },
+    "learning_applied": true,
+    "third_turn_used_phrase": true,
+    "limitation": "Second-turn model prose denied saving; later confirmation and applied events show successful background learning. Preserve both."
+  },
+  "final_api_smoke": {
+    "ok": true,
+    "session_id": "fd-final-1789794352",
+    "title": "最终镜像验收1789794352",
+    "events": [
+      {
+        "type": "session",
+        "session_id": "fd-final-1789794352"
+      },
+      {
+        "type": "busy_start",
+        "label": "Thinking"
+      },
+      {
+        "type": "busy_end"
+      },
+      {
+        "type": "tool_start",
+        "name": "create_todo",
+        "arguments": {
+          "title": "最终镜像验收1789794352",
+          "detail": "独立卷验收"
+        }
+      },
+      {
+        "type": "tool_result",
+        "name": "create_todo",
+        "result": "{\"ok\": true, \"id\": \"d83bd9e9ad08401fb3799713a182b736\", \"operation_id\": \"op_f883d2bd5e30428e99a70d830496bdb5\", \"record\": {\"id\": \"d83bd9e9ad08401fb3799713a182b736\", \"kind\": \"todos\", \"title\": \"最终镜像验收1789794352\", \"detail\": \"独立卷验收\", \"due_at\": null, \"status\": \"open\", \"created_at\": \"2026-09-19T05:05:57.092458+00:00\", \"updated_at\": \"2026-09-19T05:05:57.092458+00:00\", \"source\": null, \"meta\": {}}}"
+      },
+      {
+        "type": "busy_start",
+        "label": "Thinking"
+      },
+      {
+        "type": "busy_end"
+      },
+      {
+        "type": "text_delta",
+        "text": "\n"
+      },
+      {
+        "type": "text_delta",
+        "text": "已"
+      },
+      {
+        "type": "text_delta",
+        "text": "创建"
+      },
+      {
+        "type": "text_delta",
+        "text": "待"
+      },
+      {
+        "type": "text_delta",
+        "text": "办"
+      },
+      {
+        "type": "text_delta",
+        "text": "「"
+      },
+      {
+        "type": "text_delta",
+        "text": "最终"
+      },
+      {
+        "type": "text_delta",
+        "text": "镜像"
+      },
+      {
+        "type": "text_delta",
+        "text": "验收"
+      },
+      {
+        "type": "text_delta",
+        "text": "178"
+      },
+      {
+        "type": "text_delta",
+        "text": "979"
+      },
+      {
+        "type": "text_delta",
+        "text": "435"
+      },
+      {
+        "type": "text_delta",
+        "text": "2"
+      },
+      {
+        "type": "text_delta",
+        "text": "」，"
+      },
+      {
+        "type": "text_delta",
+        "text": "备注"
+      },
+      {
+        "type": "text_delta",
+        "text": "「"
+      },
+      {
+        "type": "text_delta",
+        "text": "独立"
+      },
+      {
+        "type": "text_delta",
+        "text": "卷"
+      },
+      {
+        "type": "text_delta",
+        "text": "验收"
+      },
+      {
+        "type": "text_delta",
+        "text": "」。"
+      },
+      {
+        "type": "busy_end"
+      },
+      {
+        "type": "token_usage",
+        "input": 12725,
+        "output": 114
+      },
+      {
+        "type": "turn_end"
+      },
+      {
+        "type": "done",
+        "session_id": "fd-final-1789794352"
+      }
+    ],
+    "record_persisted": true
+  },
+  "scope": "Real model through isolated Nginx. Runtime core unchanged; final API smoke includes config-reset patch. UI-only final fixes do not alter proxy/runtime.",
+  "model": "deepseek-v4-pro",
+  "endpoint": "https://api.deepseek.com",
+  "limitation": "Second-turn prose denied saving, but later accepted confirmation and applied event persisted the rule. Do not infer broad learning quality."
+}

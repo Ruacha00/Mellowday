@@ -1,5 +1,7 @@
 # 实施索引
 
+前端与双容器专项见 [S08–S12 Spec](FRONTEND-ROLLOUT.md) 和 [FD 原子任务板](../issues/FRONTEND-BOARD.md)。旧证据保持原版本范围。
+
 实施分支：`refactor/mellowday-runtime`。
 
 ## 完成级别（汇报时必须标注）

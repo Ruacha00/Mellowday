@@ -1,0 +1,181 @@
+{
+  "created_at": "2026-09-19T05:21:16.540636+00:00",
+  "backend": {
+    "command": "python -m pytest -q",
+    "passed": 542,
+    "failed": 0,
+    "seconds": 134.6,
+    "warnings": [
+      "Existing python_multipart import deprecation"
+    ]
+  },
+  "frontend": {
+    "command": "npm run test -- --run; npm run build; npm audit --omit=dev",
+    "passed": 40,
+    "failed": 0,
+    "test_files": 8,
+    "typecheck": true,
+    "production_build": true,
+    "production_dependency_vulnerabilities": 0
+  },
+  "browser": {
+    "url": "http://127.0.0.1:18026",
+    "mode": "scripted-agent-real-http",
+    "checks": [
+      "Vue shell and default theme render",
+      "confirmation after turn_end survives navigation and executes once",
+      "history and complete artifact pagination/search/reopen",
+      "records create/edit/undo/complete/reopen over real API",
+      "skill edit and enable/disable",
+      "skill whole-version restore",
+      "model config reflects environment override without revealing credential",
+      "five themes persist; responsive layouts and drawer focus",
+      "no browser exceptions"
+    ],
+    "ok": true,
+    "page_errors": []
+  },
+  "interaction_edges": {
+    "ok": true,
+    "checks": [
+      "saved max_turns can be cleared and survives reload",
+      "browser stop releases current turn and next turn completes",
+      "runtime error is visible and failed draft is retained",
+      "today route renders through production proxy"
+    ]
+  },
+  "http_isolated": {
+    "url": "http://127.0.0.1:18026",
+    "checks": {
+      "vue_entry": true,
+      "html_revalidates": true,
+      "api_healthy": true,
+      "/api/not-found": true,
+      "/api/not-found_json": true,
+      "/api": true,
+      "/api_json": true,
+      "/assets/not-found.js": true,
+      "/runtime/not-found.webp": true,
+      "hashed_asset_cached": true
+    },
+    "ok": true
+  },
+  "http_live": {
+    "url": "http://127.0.0.1:8021",
+    "checks": {
+      "vue_entry": true,
+      "html_revalidates": true,
+      "api_healthy": true,
+      "/api/not-found": true,
+      "/api/not-found_json": true,
+      "/api": true,
+      "/api_json": true,
+      "/assets/not-found.js": true,
+      "/runtime/not-found.webp": true,
+      "hashed_asset_cached": true
+    },
+    "ok": true
+  },
+  "proxy_stream": {
+    "first_text_seconds": 1.781,
+    "last_text_seconds": 66.781,
+    "long_wait_done": true,
+    "next_turn_seconds": 0.032,
+    "disconnect_releases_session": true
+  },
+  "proxy_stream_scope": "Same final nginx.conf and API config digest; tested before final UI-only review fixes.",
+  "isolated_lifecycle": {
+    "api_recreate": {
+      "responses": 21,
+      "sha256": "86e7c40a50b12fec82e274d49e7385b531f89ffe79988914f944c118ea95a303",
+      "identical": true
+    },
+    "frontend_unchanged": true,
+    "api_ip_changed": true,
+    "backup": {
+      "files": 16,
+      "archive_sha256": "c4f3e627822a47f740dfe54f883255adca6afb482d7ba967e239be6e52a3f6dd"
+    },
+    "restore": "verified 16",
+    "old_image_readback": {
+      "responses": 21,
+      "sha256": "86e7c40a50b12fec82e274d49e7385b531f89ffe79988914f944c118ea95a303",
+      "identical": true
+    },
+    "restart": {
+      "responses": 21,
+      "sha256": "86e7c40a50b12fec82e274d49e7385b531f89ffe79988914f944c118ea95a303",
+      "identical": true
+    },
+    "ok": true,
+    "rollback_image": "mellowday:acceptance-r4",
+    "legacy_image_limitation": "Original daily image has no tool-results HTTP route; preserved separately, not a full-feature rollback target."
+  },
+  "live_migration": {
+    "old_image": "sha256:341f8e6b1eeac5b354f99e4eba75011513b92593a9b5146a97ca872501eb4d48",
+    "old_status_at_start": "exited",
+    "live_volume": "mellowday_mellowday-data",
+    "backup": {
+      "files": 13,
+      "archive_sha256": "12df3b1869a5d6b0e89ddf7e32b3019c1bfda2a84f3f8c868da5dc62b87676fb"
+    },
+    "restore": "verified 13",
+    "live_readback": {
+      "responses": 10,
+      "sha256": "ee24fad5737247fdc015068479b49297371e84539afad1747b4cff32bc43345e",
+      "identical": true
+    },
+    "live_restart_readback": {
+      "responses": 10,
+      "sha256": "ee24fad5737247fdc015068479b49297371e84539afad1747b4cff32bc43345e",
+      "identical": true
+    },
+    "ok": true
+  },
+  "images": [
+    {
+      "tag": "mellowday-api:local",
+      "config_sha256": "b9d60039789f89fa2266ee59c8b7e884001064c7761e4f394369f52f4e466076",
+      "layers": 12,
+      "history_entries": 23,
+      "files_scanned": 12832,
+      "local_hash_matches": 37,
+      "source_or_asset_mismatch_count": 0,
+      "manifest_id": "sha256:7fad0aa61628cce3aaa0eeedf0df074ff6b5b3ee7a4ced9ca71be6ec5d50675a",
+      "restricted_name_hits": 0,
+      "credential_hits": 0
+    },
+    {
+      "tag": "mellowday-frontend:local",
+      "config_sha256": "f350ea38c0ab82afa8f2ddc0eb7085d67ac76cb9cc3a439b815fbdd5e7b77792",
+      "layers": 10,
+      "history_entries": 24,
+      "files_scanned": 1033,
+      "local_hash_matches": 34,
+      "source_or_asset_mismatch_count": 0,
+      "manifest_id": "sha256:dffd9eb0900dec31ab5e68297e93872d7fc27d466e18c9ce15425f3c5cde18a0",
+      "restricted_name_hits": 0,
+      "credential_hits": 0
+    }
+  ],
+  "boundaries": {
+    "runtime_source_hashes_matched": 13,
+    "runtime_core_changed": false,
+    "public_restricted_name_hits": 0,
+    "public_credential_hits": 0,
+    "local_credential_values_checked": 2,
+    "scope": "Current public files, dist, final image layers and metadata; excludes Git history and BuildKit intermediate cache."
+  },
+  "known_failures_and_fixes": [
+    "Package registry SSL EOF/ECONNRESET from containers: build succeeded using host proxy build args; TLS verification retained.",
+    "markdown-it advisory: upgrade to 14.3.2, production audit zero findings.",
+    "Nginx regex overrode hashed-asset cache policy: fixed location precedence using ^~.",
+    "Old daily image lacks tool-results HTTP route: retained original image and verified complete rollback against previously accepted image.",
+    "Uppercase DONE entered today view: normalize status in filtering and labels.",
+    "Delayed recent-session selection overrode later navigation: request/navigation ownership guards and visible failures.",
+    "Delayed Skills list overwrote disabled state: red test expected disabled, received enabled; request revision fix passes.",
+    "Browser harness corrected selectors/expected heading using actual UI; assertions retained.",
+    "Image checker initially compared base Nginx index.html with Vue index.html; compare final overlaid static files while scanning every layer for sensitive content."
+  ],
+  "ok": true
+}

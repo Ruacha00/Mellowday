@@ -84,7 +84,9 @@ def save_model_config(cfg: ModelConfig) -> ModelConfig:
 def update_model_config(**changes: Any) -> ModelConfig:
     cfg = load_model_config()
     for key, value in changes.items():
-        if value is None or not hasattr(cfg, key):
+        if not hasattr(cfg, key):
+            continue
+        if value is None and key != "max_turns":
             continue
         if key == "api_key" and value == "":
             continue  # empty key means "keep existing"

@@ -1,0 +1,34 @@
+{
+  "name": "mellowday-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "check": "vue-tsc --noEmit",
+    "test": "vitest",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:e2e": "python tests/browser/acceptance.py"
+  },
+  "dependencies": {
+    "markdown-it": "14.3.2",
+    "vue": "3.5.25",
+    "vue-router": "4.6.3"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "14.1.2",
+    "@types/node": "22.19.3",
+    "@vitejs/plugin-vue": "6.0.2",
+    "@vue/test-utils": "2.4.6",
+    "jsdom": "26.1.0",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "vite": "7.2.7",
+    "vitest": "3.2.4",
+    "vue-tsc": "3.1.8"
+  }
+}
