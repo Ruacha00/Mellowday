@@ -1,6 +1,6 @@
 """I23: folding and restarting a session must not destroy its raw record.
 
-The runtime side of contract 6ter (docs/specs/CONTRACTS.md):
+Runtime persistence guarantees:
 
 * the raw execution record is append-only and lives in its own file, so neither
   a folded context nor the runtime auto-save (which writes the folded message

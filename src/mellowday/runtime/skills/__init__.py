@@ -5,8 +5,7 @@ extra third-party dependency is required. All persistent state lives under
 :func:`mellowday.paths.skills_dir`, :func:`mellowday.paths.skills_archive_dir` and
 :func:`mellowday.paths.evolution_dir`.
 
-The names listed in :data:`__all__` are the stable public surface described by
-docs/specs/CONTRACTS.md section 4.5 and are importable directly from
+The names listed in :data:`__all__` are the stable public surface, importable from
 ``mellowday.runtime.skills```.
 """
 from __future__ import annotations

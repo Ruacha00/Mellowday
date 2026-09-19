@@ -52,7 +52,6 @@ docker compose up -d --build --wait
 
 聊天优先版本新增记忆轮次、日历例外、订阅投递及人格适应存储；原 records 继续作为事项权威来源。旧 wheel 的静态入口仍保留。回退先验证新写入数据兼容；若必须恢复备份，明确恢复点之后的新增数据影响。权限应匹配 API UID 1000；遇到拒绝访问先备份并针对核实后的卷修复属主，不重建空卷。
 
-本机演练发现，原日常镜像缺少工具原文 HTTP 接口。它已单独保留为 `mellowday:pre-vue-20260919`，完整能力回退使用已验收的 `mellowday:acceptance-r4`。回退前必须验证所选镜像本身支持需要的接口，不能只验证卷存在。本轮备份、镜像身份和数据一致性摘要见验收报告，个人数据及具体恢复文件只保存在本地忽略目录。
 
 ## 开发与 Python 单独运行
 
@@ -90,5 +89,3 @@ npm run test:e2e
 - API 返回 HTML：检查代理与 fallback；未知 API 是 JSON 404，缺失 JS/CSS 也应返回 404。
 - 容器包源下载失败：区分引擎与容器出网。需要代理时向构建传 Docker 的 `HTTP_PROXY`/`HTTPS_PROXY` 参数，地址使用容器可达的宿主地址。不要关闭 TLS 校验或把代理凭据写入 Dockerfile。
 - Docker Desktop Inference manager 启动错误发生在引擎启动前，应用 Compose 无法修复；先检查 `docker version` 的 Server 信息和 Desktop 日志。
-
-范围见 [S11](specs/S11-container-delivery.md)、[S12](specs/S12-acceptance.md)，本轮证据见[验收报告](evidence/FD-acceptance.md)。

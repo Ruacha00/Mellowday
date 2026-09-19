@@ -9,7 +9,7 @@ Two kinds of check, deliberately separated:
     "did the model follow the habit" is flaky at temperature 1 and would make
     the gate lie in both directions.
 
-Method rules this gate enforces (see docs/evidence/P3-P4-l3-gate-method.md):
+Method rules this gate enforces:
 
   * every run gets its own data directory (database, sessions, skills, skill
     archive, evolution records, config.json), pinned before mellowday is

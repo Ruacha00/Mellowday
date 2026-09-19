@@ -1,6 +1,6 @@
 """I24a 运行时测试：技能查看、停用/恢复、版本历史与版本回退。
 
-核心验收（对应 docs/issues/BOARD.md 的 I24 与 CONTRACTS.md 6quinquies）：
+核心验收：
 
 * list_skills 能列出技能的版本、启用状态、来源与路径；
 * **停用必须真的影响检索**：停用后 discover_skills / build_skill_descriptions /

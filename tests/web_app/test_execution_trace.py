@@ -1,6 +1,6 @@
 """I23: the raw execution record survives folding, restarts and deletion.
 
-Contract 6ter (docs/specs/CONTRACTS.md) requires the raw record of every turn -
+The execution trace requires the raw record of every turn -
 user message, assistant text, tool call, tool result, error - to be appended to
 its own file, independently of the runtime message list. Folding the context
 replaces that list, and the runtime auto-saves the folded list over

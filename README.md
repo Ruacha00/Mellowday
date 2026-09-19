@@ -4,7 +4,6 @@
 
 ## 当前状态
 
-当前产品范围以 [S18](docs/specs/S18-chat-first-product-scope.md) 为准，技术规格分为 [人格](docs/specs/S19-persona-adaptation.md)、[本轮记忆](docs/specs/S20-current-turn-memory.md)、[日历与消息](docs/specs/S21-calendar-delivery.md)、[聊天界面](docs/specs/S22-chat-first-interface.md)。实施依赖见[原子任务板](docs/issues/CHAT-FIRST-BOARD.md)。旧验收报告保留历史结论，不代表当前范围。
 
 - 聊天为主入口；人格、记忆、Skills、事务记录与模型管理集中在设置子菜单。固定日历按钮与聊天工具可唤起侧边日历。
 - 单一角色：用户编辑核心人格及说话示例；可变表达规则按当前对话证据小幅更新，支持暂停、锁定、撤销和重置。不会自动改写核心身份或关系。
@@ -16,7 +15,6 @@
 
 无需主动问候、独立今日概览或每日回顾页面。人格演化与记忆筛选依赖模型判断，边界与证据检查不等于长期语义正确性保证。聊天完成后会有独立评估调用。
 
-此前动效和历史部署证据见 [docs/evidence](docs/evidence/README.md)；本轮交付见[聊天优先验收](docs/evidence/CF-acceptance.md)。
 
 ## 运行
 
@@ -95,11 +93,6 @@ evals/                             三条件对照评测（开发/保留案例�
 
 ## 文档
 
-- [Wiki 总览与阅读导航](docs/wiki/README.md)
-- [架构设计](docs/wiki/架构设计.md) · [源码阅读](docs/wiki/核心源码阅读指南.md) · [Skills 学习机制](docs/wiki/Skills自进化逻辑与实现思路.md)
-
-- [重构实施计划](IMPLEMENTATION_PLAN.md)
-- [阶段与 Spec 索引](docs/specs/README.md)
-- [接口契约](docs/specs/CONTRACTS.md)
-- [原子任务板](docs/issues/BOARD.md)
-- [验证证据](docs/evidence/README.md)
+- [部署与升级](docs/deployment.md)
+- [对照评测用法](evals/README.md)
+- [素材来源与授权](ASSET_SOURCES.md)

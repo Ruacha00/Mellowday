@@ -6,7 +6,7 @@ durable rule that a brand new session follows? That path is model-driven -
 candidate extraction, a confirmation the user must approve, then retrieval in a
 later session - so only a real model can exercise it.
 
-Method rules this gate enforces (see docs/evidence/P3-P4-l3-gate-method.md):
+Method rules this gate enforces:
 
   * one isolated data directory per run (database, sessions, skills, skill
     archive, evolution records, config.json), pinned before mellowday is

@@ -1096,8 +1096,8 @@ async function loadRecords() {
 
 // -------------------------------------------------------------- skills (habits)
 
-// The habit page drives the endpoints fixed by the runtime contract
-// (docs/specs/CONTRACTS.md 4.5). Every path lives in this one table, so a wrong
+// The habit page drives the runtime endpoints.
+// Every path lives in this one table, so a wrong
 // path is a one-line fix and a static test failure instead of a silent 404.
 const SKILL_ENDPOINTS = {
   list: "/api/skills",

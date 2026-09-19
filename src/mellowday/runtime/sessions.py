@@ -2,8 +2,7 @@
 
 Everything lives under mellowday.paths.sessions_dir() (runtime state and the raw
 record) or mellowday.paths.data_dir() (the over-long tool results), never inside
-the source tree. Four kinds of state are kept apart on purpose
-(docs/specs/CONTRACTS.md 6ter):
+the source tree. Four kinds of state are kept apart on purpose:
 
 * `{session_id}.json` - the runtime message list. Context folding replaces it
   and the runtime auto-saves over it, so it only ever holds the *current*
@@ -129,7 +128,7 @@ def get_latest_session_id() -> str | None:
     return sessions[0].get("id")
 
 # --------------------------------------------------------------------------
-# Raw execution trace (docs/specs/CONTRACTS.md 6ter)
+# Raw execution trace
 # --------------------------------------------------------------------------
 # One JSON object per line, appended for the lifetime of the session:
 #
@@ -289,7 +288,7 @@ def next_trace_turn(session_id: str) -> int:
 
 
 # --------------------------------------------------------------------------
-# Over-long tool results (docs/specs/CONTRACTS.md 6ter)
+# Over-long tool results
 # --------------------------------------------------------------------------
 # One file per over-long tool result, kept under
 #

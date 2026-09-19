@@ -1,11 +1,11 @@
 # 对照评测
 
-`p5_compare.py` 已实现 P5 三条件对照。第四轮在同一工作区指纹、同一模型配置下完成 18 个样本，三臂各 9/9 测量完整性检查通过；行为命中不等于完整性检查通过率。结果见 [R4 验收报告](../docs/evidence/R4-acceptance.md)。
+`p5_compare.py` 提供三条件对照评测。行为命中率与测量完整性分别记录。
 
 使用固定开发案例调试，冻结后运行不同日期、不同事务的保留案例，并对比三组条件。
 
 ```bash
-python evals/p5_compare.py --samples 3 --json-out docs/evidence/raw/p5-new-run.json
+python evals/p5_compare.py --samples 3 --json-out evals/reports/p5-new-run.json
 ```
 
 每臂使用独立进程与隔离数据目录。退出码 0 表示测量完整性成立，不表示每个回复均遵守规则；样本失败保留在报告的 `failures` 字段。

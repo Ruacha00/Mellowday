@@ -4,7 +4,7 @@ One SessionState owns exactly one runtime agent. A session runs one turn at a
 time (a per-session lock), while different sessions run concurrently; that is
 what keeps conversation state isolated and reproducible.
 
-Three lifecycle rules are enforced here (see docs/specs/CONTRACTS.md 6bis):
+Three lifecycle rules are enforced here:
 
 * a turn is only started while the session lock is held, and the execution task
   is always finished before that lock is released - a client that disconnects
@@ -19,7 +19,7 @@ Three lifecycle rules are enforced here (see docs/specs/CONTRACTS.md 6bis):
 
 Two more contracts live here.
 
-The raw execution record (docs/specs/CONTRACTS.md 6ter) is written next to the
+The raw execution record is written next to the
 display history as an append-only JSONL file, one line per user message,
 assistant text, tool call, tool result and error. Context folding rewrites the
 runtime message list and the runtime auto-saves that folded list over

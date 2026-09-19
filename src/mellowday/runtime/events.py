@@ -11,8 +11,7 @@ two concurrent sessions never see each other's events.
 
 Event payloads always contain a `type` key. No event carries credentials.
 
-Besides the conversation events listed in docs/specs/CONTRACTS.md section 3, this
-module defines the learning-loop events (I24, contract 6quinquies):
+Besides conversation events, this module defines learning-loop events:
 
     skill_candidate_proposed, skill_candidate_applied, skill_write_denied,
     skill_candidate_failed, skill_candidate_skipped
@@ -113,7 +112,7 @@ LEARNING_EVENT_TYPES = (
     "skill_candidate_failed",
     "skill_candidate_skipped",
 )
-"""The event types added for the learning loop (docs/specs/CONTRACTS.md 6quinquies)."""
+"""The event types added for the learning loop."""
 
 
 def skill_event(

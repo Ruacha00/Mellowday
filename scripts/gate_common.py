@@ -1830,7 +1830,7 @@ class Report:
         text = redact(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text + "\n", encoding="utf-8")
-        # The stable path under docs/evidence is "the latest run" and therefore
+        # The stable report path is "the latest run" and therefore
         # overwritten; the run directory keeps an immutable copy of this run.
         if self.run.artifacts_dir.is_dir() and self.run.artifacts_dir / path.name != path:
             try:

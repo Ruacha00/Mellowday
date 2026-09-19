@@ -145,8 +145,7 @@ def create_app(*, store: Store | None = None, registry: service.SessionRegistry 
     async def list_sessions() -> dict[str, Any]:
         return {"sessions": app.state.registry.list()}
 
-    # Chosen behaviour for an id that exists nowhere (see docs/specs/CONTRACTS.md
-    # 6bis): reading or deleting an unknown session is a 404, never an empty 200.
+    # Reading or deleting an unknown session is a 404, never an empty 200.
     # An id that could not be a session at all is a 400.
     @app.get("/api/sessions/{session_id}")
     async def session_detail(session_id: str) -> dict[str, Any]:
