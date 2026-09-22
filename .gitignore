@@ -37,3 +37,13 @@ output/
 playwright-report/
 test-results/
 evals/reports/
+
+# Local reference documentation (not published)
+/CONTEXT.md
+/IMPLEMENTATION_PLAN.md
+/docs/wiki/
+/docs/plans/
+/docs/specs/
+/docs/issues/
+/docs/adr/
+/docs/evidence/
