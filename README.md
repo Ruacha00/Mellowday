@@ -2,11 +2,9 @@
 
 <a id="top"></a>
 
-<img src="frontend/public/runtime/themes/mint-emblem.webp" width="180" alt="MellowDay 薄荷绿植物标识">
 
 # MellowDay
 
-**慢慢过日子，也好好记得你。**
 
 面向个人生活与事务管理的智能助理，将聊天、待办、日历、提醒与笔记放在一起，<br>
 结合长期事实记忆与可学习、可版本化的工作流程。
