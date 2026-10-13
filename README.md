@@ -9,12 +9,6 @@
 面向个人生活与事务管理的智能助理，将聊天、待办、日历、提醒与笔记放在一起，<br>
 结合长期事实记忆与可学习、可版本化的工作流程。
 
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
-[![Vue 3](https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)](frontend/package.json)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](pyproject.toml)
-[![Docker Compose](https://img.shields.io/badge/Deploy-Docker_Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-6B7280?style=flat-square)](LICENSE)
-
 [功能一览](#features) · [快速开始](#quick-start) · [配置说明](#configuration) · [测试与验收](#validation) · [项目架构](#architecture) · [文档导航](#documentation)
 
 </div>
